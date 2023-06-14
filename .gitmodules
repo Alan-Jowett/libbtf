@@ -1,3 +1,0 @@
-[submodule "external/ebpf-samples"]
-	path = external/ebpf-samples
-	url = https://github.com/vbpf/ebpf-samples.git
