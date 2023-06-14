@@ -18,7 +18,10 @@ public:
   /**
    * @brief Construct a new empty btf type data object
    */
-  btf_type_data() = default;
+  btf_type_data() {
+    // Add the void type.
+    id_to_kind[0] = btf_kind_null{};
+  }
 
   /**
    * @brief Construct a new btf type data object from a vector of bytes.
@@ -52,6 +55,7 @@ public:
   void to_json(std::ostream &out) const;
   std::vector<std::byte> to_bytes() const;
   void append(const btf_kind &kind);
+  btf_type_id last_type_id() const { return id_to_kind.rbegin()->first; }
 
 private:
   void validate_type_graph(btf_type_id id,

@@ -4,6 +4,8 @@
 #include "btf_write.h"
 #include "btf_c_type.h"
 
+#include <cstring>
+
 namespace libbtf {
 
 template <typename T>
@@ -159,9 +161,9 @@ std::vector<std::byte> btf_write_types(const std::vector<btf_kind> &btf_kind) {
                  });
       for (const auto &member : enum_type.members) {
         _write_btf(type_table_bytes,
-                   btf_member_t{
+                   btf_enum_t{
                        .name_off = string_to_offset(member.name),
-                       .offset = member.value,
+                       .val = member.value,
                    });
       }
       break;
@@ -265,10 +267,12 @@ std::vector<std::byte> btf_write_types(const std::vector<btf_kind> &btf_kind) {
     }
     case BTF_KIND_FLOAT: {
       const auto &float_type = std::get<BTF_KIND_FLOAT>(kind);
-      _write_btf(type_table_bytes, btf_type_t{
-                                       .info = pack_btf_info(),
-                                       .size = float_type.size_in_bytes,
-                                   });
+      _write_btf(type_table_bytes,
+                 btf_type_t{
+                     .name_off = string_to_offset(float_type.name),
+                     .info = pack_btf_info(),
+                     .size = float_type.size_in_bytes,
+                 });
       break;
     }
     case BTF_KIND_DECL_TAG: {
@@ -279,6 +283,9 @@ std::vector<std::byte> btf_write_types(const std::vector<btf_kind> &btf_kind) {
                      .info = pack_btf_info(),
                      .type = decl_tag_type.type,
                  });
+      _write_btf(
+          type_table_bytes,
+          btf_decl_tag_t{.component_idx = decl_tag_type.component_index});
       break;
     }
     case BTF_KIND_TYPE_TAG: {

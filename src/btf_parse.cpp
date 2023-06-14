@@ -5,6 +5,7 @@
 
 #include "btf_c_type.h"
 
+#include <cstring>
 #include <stdexcept>
 
 namespace libbtf {

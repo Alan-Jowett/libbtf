@@ -75,7 +75,8 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
     throw std::runtime_error("invalid map type");
   }
 
-  btf_map_definition map_definition = {0};
+  btf_map_definition map_definition = {};
+  map_definition.name = std::get<BTF_KIND_VAR>(map_var).name;
 
   // Required fields.
   map_definition.type_id = std::get<BTF_KIND_VAR>(map_var).type;

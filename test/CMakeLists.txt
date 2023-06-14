@@ -14,7 +14,7 @@ FetchContent_MakeAvailable(Catch2)
 FetchContent_Declare(
   elfio
   GIT_REPOSITORY https://github.com/serge1/ELFIO.git
-  GIT_TAG        Release_3.11 # or a later release
+  GIT_TAG        Release_3.10 # or a later release
 )
 
 FetchContent_MakeAvailable(elfio)

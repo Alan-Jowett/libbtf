@@ -98,8 +98,6 @@ size_t btf_type_data::get_size(btf_type_id id) const {
     return get_size(std::get<BTF_KIND_TYPE_TAG>(kind).type);
   case BTF_KIND_ENUM64:
     return std::get<BTF_KIND_ENUM64>(kind).size_in_bytes;
-  default:
-    throw std::runtime_error("unknown BTF type kind");
   }
 }
 
@@ -191,9 +189,6 @@ void btf_type_data::validate_type_graph(btf_type_id id,
     break;
   case BTF_KIND_ENUM64:
     break;
-  default:
-    throw std::runtime_error("unknown BTF type kind " +
-                             std::to_string(kind.index()));
   }
 
   visited.erase(id);
@@ -272,8 +267,6 @@ void btf_type_data::append(const btf_kind &kind) {
           {std::get<BTF_KIND_ENUM64>(kind).name.value(), next_id});
     }
     break;
-  default:
-    throw std::runtime_error("unknown BTF_KIND");
   }
 }
 } // namespace libbtf
