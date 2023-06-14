@@ -26,4 +26,4 @@ include_directories(${elfio_SOURCE_DIR})
 
 target_link_libraries(tests PRIVATE
     Catch2::Catch2WithMain
-    "btf")
+    "libbtf")

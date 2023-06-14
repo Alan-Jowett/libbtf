@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 
-add_library("btf" STATIC
+add_library("libbtf" STATIC
     "btf.h"
     "btf_c_type.h"
     "btf_json.cpp"
@@ -17,4 +17,4 @@ add_library("btf" STATIC
     "btf_write.h"
 )
 
-target_include_directories("btf" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories("libbtf" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")

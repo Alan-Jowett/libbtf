@@ -98,6 +98,8 @@ size_t btf_type_data::get_size(btf_type_id id) const {
     return get_size(std::get<BTF_KIND_TYPE_TAG>(kind).type);
   case BTF_KIND_ENUM64:
     return std::get<BTF_KIND_ENUM64>(kind).size_in_bytes;
+  default:
+    return 0;
   }
 }
 
