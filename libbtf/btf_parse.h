@@ -25,7 +25,7 @@ using btf_line_info_visitor =
                        uint32_t line_number, uint32_t column_number)>;
 
 /**
- * @brief Parse a .BTF and .BTF.ext section from an ELF file invoke vistor for
+ * @brief Parse a .BTF and .BTF.ext section from an ELF file invoke visitor for
  * each btf_line_info record.
  *
  * @param[in] btf The .BTF section (containing type info and strings).

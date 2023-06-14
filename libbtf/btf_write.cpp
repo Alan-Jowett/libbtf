@@ -249,13 +249,13 @@ std::vector<std::byte> btf_write_types(const std::vector<btf_kind> &btf_kind) {
       break;
     }
     case BTF_KIND_DATA_SECTION: {
-      const auto &datasec_type = std::get<BTF_KIND_DATA_SECTION>(kind);
+      const auto &data_section_type = std::get<BTF_KIND_DATA_SECTION>(kind);
       _write_btf(type_table_bytes,
                  btf_type_t{
-                     .name_off = string_to_offset(datasec_type.name),
-                     .info = pack_btf_info(datasec_type.members.size()),
+                     .name_off = string_to_offset(data_section_type.name),
+                     .info = pack_btf_info(data_section_type.members.size()),
                  });
-      for (const auto &member : datasec_type.members) {
+      for (const auto &member : data_section_type.members) {
         _write_btf(type_table_bytes, btf_var_secinfo_t{
                                          .type = member.type,
                                          .offset = member.offset,

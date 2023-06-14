@@ -26,7 +26,7 @@ struct btf_map_definition {
  * @brief Extract BTF map definitions from a BTF_KIND_DATA_SECTION section with
  * name ".maps".
  *
- * @param[in] btfd BTF data.
+ * @param[in] btf BTF data.
  * @return A vector of BTF map definitions.
  */
 std::vector<btf_map_definition>
