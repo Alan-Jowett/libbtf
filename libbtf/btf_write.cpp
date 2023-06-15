@@ -112,8 +112,6 @@ std::vector<std::byte> btf_write_types(const std::vector<btf_kind> &btf_kind) {
                                   int_type.field_width_in_bits));
       break;
     }
-    case BTF_KIND_PTR:
-      break;
     case BTF_KIND_ARRAY: {
       const auto &array_type = std::get<BTF_KIND_ARRAY>(kind);
       write_btf(type_table_bytes, btf_array_t{
@@ -158,18 +156,6 @@ std::vector<std::byte> btf_write_types(const std::vector<btf_kind> &btf_kind) {
       }
       break;
     }
-    case BTF_KIND_FWD:
-      break;
-    case BTF_KIND_TYPEDEF:
-      break;
-    case BTF_KIND_VOLATILE:
-      break;
-    case BTF_KIND_CONST:
-      break;
-    case BTF_KIND_RESTRICT:
-      break;
-    case BTF_KIND_FUNCTION:
-      break;
     case BTF_KIND_FUNCTION_PROTOTYPE: {
       const auto &func_proto_type = std::get<BTF_KIND_FUNCTION_PROTOTYPE>(kind);
       for (const auto &parameter : func_proto_type.parameters) {
@@ -198,16 +184,12 @@ std::vector<std::byte> btf_write_types(const std::vector<btf_kind> &btf_kind) {
 
       break;
     }
-    case BTF_KIND_FLOAT:
-      break;
     case BTF_KIND_DECL_TAG: {
       const auto &decl_tag_type = std::get<BTF_KIND_DECL_TAG>(kind);
       write_btf(type_table_bytes,
                 btf_decl_tag_t{.component_idx = decl_tag_type.component_index});
       break;
     }
-    case BTF_KIND_TYPE_TAG:
-      break;
     case BTF_KIND_ENUM64: {
       const auto &enum64_type = std::get<BTF_KIND_ENUM64>(kind);
       for (const auto &member : enum64_type.members) {
