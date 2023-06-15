@@ -14,12 +14,12 @@ include("cmake/platform.cmake")
 include("cmake/options.cmake")
 include("cmake/version.cmake")
 
-if(BTF_ENABLE_TESTS)
-  include("CTest")
-endif()
-
 add_subdirectory("libbtf")
 
 if(BTF_ENABLE_TESTS)
   add_subdirectory("test")
+endif()
+
+if (BTF_ENABLE_FUZZING)
+  add_subdirectory("libfuzzer")
 endif()
