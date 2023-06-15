@@ -16,9 +16,9 @@ permissions:
 jobs:
   build:
 
-    runs-on: ${{inputs.platform}}
+    runs-on: ubuntu-22.04
     env:
-      BUILD_TYPE: ${{inputs.configuration}}
+      BUILD_TYPE: Debug
 
     steps:
     - uses: actions/checkout@v3
