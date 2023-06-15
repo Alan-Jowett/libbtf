@@ -18,7 +18,8 @@ add_subdirectory("libbtf")
 
 if(BTF_ENABLE_TESTS)
   add_subdirectory("test")
-  if (PLATFORM_LINUX)
-    add_subdirectory("libfuzzer")
-  endif()
+endif()
+
+if (BTF_ENABLE_FUZZING)
+  add_subdirectory("libfuzzer")
 endif()

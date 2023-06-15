@@ -30,11 +30,11 @@ jobs:
         cmake \
           -B ${{github.workspace}}/build \
           -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} \
-          -DBTF_ENABLE_TESTS=TRUE
+          -DBTF_ENABLE_FUZZING=TRUE
 
     - name: Build only libbtf_fuzzer
       # Build your program with the given configuration
-      run: cmake --build ${{github.workspace}}/build --target libbtf_fuzzer
+      run: cmake --build ${{github.workspace}}/build
 
     - name: Tests
       working-directory: ${{github.workspace}}
