@@ -3,7 +3,7 @@
 
 # Linux only.
 
-name: CI/CD
+name: Fuzzer
 
 on:
   workflow_dispatch:
