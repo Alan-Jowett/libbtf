@@ -10,8 +10,8 @@
 
 namespace libbtf {
 template <typename T>
-static T _read_btf(const std::vector<std::byte> &btf, size_t &offset,
-                   size_t minimum_offset = 0, size_t maximum_offset = 0) {
+static T read_btf(const std::vector<std::byte> &btf, size_t &offset,
+                  size_t minimum_offset = 0, size_t maximum_offset = 0) {
   size_t length = 0;
   if (maximum_offset == 0) {
     maximum_offset = btf.size();
@@ -40,7 +40,7 @@ static T _read_btf(const std::vector<std::byte> &btf, size_t &offset,
   }
 }
 
-static void _validate_offset(std::vector<std::byte> const &btf, size_t offset) {
+static void validate_offset(std::vector<std::byte> const &btf, size_t offset) {
   if (offset < 0) {
     throw std::runtime_error("Invalid .BTF section - invalid offset");
   }
@@ -50,10 +50,10 @@ static void _validate_offset(std::vector<std::byte> const &btf, size_t offset) {
   }
 }
 
-static void _validate_range(std::vector<std::byte> const &btf, size_t start,
-                            size_t end) {
-  _validate_offset(btf, start);
-  _validate_offset(btf, end);
+static void validate_range(std::vector<std::byte> const &btf, size_t start,
+                           size_t end) {
+  validate_offset(btf, start);
+  validate_offset(btf, end);
 
   if (start > end) {
     throw std::runtime_error("Invalid .BTF section - invalid range");
@@ -65,7 +65,7 @@ _btf_parse_string_table(const std::vector<std::byte> &btf) {
   std::map<size_t, std::string> string_table;
 
   size_t offset = 0;
-  auto btf_header = _read_btf<btf_header_t>(btf, offset);
+  auto btf_header = read_btf<btf_header_t>(btf, offset);
   if (btf_header.magic != BTF_HEADER_MAGIC) {
     throw std::runtime_error("Invalid .BTF section - wrong magic");
   }
@@ -84,12 +84,12 @@ _btf_parse_string_table(const std::vector<std::byte> &btf) {
   size_t string_table_end =
       string_table_start + static_cast<size_t>(btf_header.str_len);
 
-  _validate_range(btf, string_table_start, string_table_end);
+  validate_range(btf, string_table_start, string_table_end);
 
   for (size_t offset = string_table_start; offset < string_table_end;) {
     size_t string_offset = offset - string_table_start;
-    std::string value = _read_btf<std::string>(btf, offset, string_table_start,
-                                               string_table_end);
+    std::string value = read_btf<std::string>(btf, offset, string_table_start,
+                                              string_table_end);
     if (offset > string_table_end) {
       throw std::runtime_error("Invalid .BTF section - invalid string length");
     }
@@ -115,7 +115,7 @@ void btf_parse_line_information(const std::vector<std::byte> &btf,
   std::map<size_t, std::string> string_table = _btf_parse_string_table(btf);
 
   size_t btf_ext_offset = 0;
-  auto bpf_ext_header = _read_btf<btf_ext_header_t>(btf_ext, btf_ext_offset);
+  auto bpf_ext_header = read_btf<btf_ext_header_t>(btf_ext, btf_ext_offset);
   if (bpf_ext_header.hdr_len < sizeof(btf_ext_header_t)) {
     throw std::runtime_error("Invalid .BTF.ext section - wrong size");
   }
@@ -135,10 +135,10 @@ void btf_parse_line_information(const std::vector<std::byte> &btf,
   size_t line_info_end =
       line_info_start + static_cast<size_t>(bpf_ext_header.line_info_len);
 
-  _validate_range(btf_ext, line_info_start, line_info_end);
+  validate_range(btf_ext, line_info_start, line_info_end);
 
   btf_ext_offset = line_info_start;
-  uint32_t line_info_record_size = _read_btf<uint32_t>(
+  uint32_t line_info_record_size = read_btf<uint32_t>(
       btf_ext, btf_ext_offset, line_info_start, line_info_end);
   if (line_info_record_size < sizeof(bpf_line_info_t)) {
     throw std::runtime_error(std::string(
@@ -146,12 +146,12 @@ void btf_parse_line_information(const std::vector<std::byte> &btf,
   }
 
   for (; btf_ext_offset < line_info_end;) {
-    auto section_info = _read_btf<btf_ext_info_sec_t>(
+    auto section_info = read_btf<btf_ext_info_sec_t>(
         btf_ext, btf_ext_offset, line_info_start, line_info_end);
     auto section_name =
         _btf_find_string(string_table, section_info.sec_name_off);
     for (size_t index = 0; index < section_info.num_info; index++) {
-      auto btf_line_info = _read_btf<bpf_line_info_t>(
+      auto btf_line_info = read_btf<bpf_line_info_t>(
           btf_ext, btf_ext_offset, line_info_start, line_info_end);
       auto file_name =
           _btf_find_string(string_table, btf_line_info.file_name_off);
@@ -169,7 +169,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
   btf_type_id id = 0;
   size_t offset = 0;
 
-  auto btf_header = _read_btf<btf_header_t>(btf, offset);
+  auto btf_header = read_btf<btf_header_t>(btf, offset);
 
   if (btf_header.magic != BTF_HEADER_MAGIC) {
     throw std::runtime_error("Invalid .BTF section - wrong magic");
@@ -187,7 +187,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
                       static_cast<size_t>(btf_header.type_off);
   size_t type_end = type_start + static_cast<size_t>(btf_header.type_len);
 
-  _validate_range(btf, type_start, type_end);
+  validate_range(btf, type_start, type_end);
 
   btf_kind_null kind_null;
   visitor(0, "void", {kind_null});
@@ -195,7 +195,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
   size_t type_offset = type_start;
   for (offset = type_start; offset < type_end;) {
     std::optional<std::string> name;
-    auto btf_type = _read_btf<btf_type_t>(btf, offset, type_start, type_end);
+    auto btf_type = read_btf<btf_type_t>(btf, offset, type_start, type_end);
     if (btf_type.name_off) {
       name = _btf_find_string(string_table, btf_type.name_off);
     } else {
@@ -220,8 +220,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
     switch (BPF_TYPE_INFO_KIND(btf_type.info)) {
     case BTF_KIND_INT: {
       btf_kind_int kind_int;
-      uint32_t int_data =
-          _read_btf<uint32_t>(btf, offset, type_start, type_end);
+      uint32_t int_data = read_btf<uint32_t>(btf, offset, type_start, type_end);
       uint32_t encoding = BTF_INT_ENCODING(int_data);
       kind_int.offset_from_start_in_bits = BTF_INT_OFFSET(int_data);
       kind_int.field_width_in_bits = BTF_INT_BITS(int_data);
@@ -240,8 +239,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
       break;
     }
     case BTF_KIND_ARRAY: {
-      auto btf_array =
-          _read_btf<btf_array_t>(btf, offset, type_start, type_end);
+      auto btf_array = read_btf<btf_array_t>(btf, offset, type_start, type_end);
       btf_kind_array kind_array;
       kind_array.element_type = btf_array.type;
       kind_array.index_type = btf_array.index_type;
@@ -255,7 +253,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
       for (uint32_t index = 0; index < member_count; index++) {
         btf_kind_struct_member member;
         auto btf_member =
-            _read_btf<btf_member_t>(btf, offset, type_start, type_end);
+            read_btf<btf_member_t>(btf, offset, type_start, type_end);
         if (btf_member.name_off) {
           member.name = _btf_find_string(string_table, btf_member.name_off);
         }
@@ -274,7 +272,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
       for (uint32_t index = 0; index < member_count; index++) {
         btf_kind_struct_member member;
         auto btf_member =
-            _read_btf<btf_member_t>(btf, offset, type_start, type_end);
+            read_btf<btf_member_t>(btf, offset, type_start, type_end);
         if (btf_member.name_off) {
           member.name = _btf_find_string(string_table, btf_member.name_off);
         }
@@ -291,8 +289,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
       uint32_t enum_count = BPF_TYPE_INFO_VLEN(btf_type.info);
       btf_kind_enum kind_enum;
       for (uint32_t index = 0; index < enum_count; index++) {
-        auto btf_enum =
-            _read_btf<btf_enum_t>(btf, offset, type_start, type_end);
+        auto btf_enum = read_btf<btf_enum_t>(btf, offset, type_start, type_end);
         btf_kind_enum_member member;
         if (!btf_enum.name_off) {
           throw std::runtime_error(
@@ -346,7 +343,6 @@ void btf_parse_types(const std::vector<std::byte> &btf,
       kind_function.type = btf_type.type;
       kind_function.linkage = static_cast<decltype(kind_function.linkage)>(
           BPF_TYPE_INFO_VLEN(btf_type.info));
-      // kind_func.linkage = BPF_TYPE_INFO_VLEN(btf_type.info);
       kind = kind_function;
       break;
     }
@@ -355,7 +351,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
       uint32_t param_count = BPF_TYPE_INFO_VLEN(btf_type.info);
       for (uint32_t index = 0; index < param_count; index++) {
         auto btf_param =
-            _read_btf<btf_param_t>(btf, offset, type_start, type_end);
+            read_btf<btf_param_t>(btf, offset, type_start, type_end);
         btf_kind_function_parameter param;
         // Name is optional.
         if (btf_param.name_off) {
@@ -370,7 +366,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
     }
     case BTF_KIND_VAR: {
       btf_kind_var kind_var;
-      auto btf_var = _read_btf<btf_var_t>(btf, offset, type_start, type_end);
+      auto btf_var = read_btf<btf_var_t>(btf, offset, type_start, type_end);
       kind_var.name = name.value();
       kind_var.type = btf_type.type;
       kind_var.linkage =
@@ -383,7 +379,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
       uint32_t section_count = BPF_TYPE_INFO_VLEN(btf_type.info);
       for (uint32_t index = 0; index < section_count; index++) {
         auto btf_section_info =
-            _read_btf<btf_var_secinfo_t>(btf, offset, type_start, type_end);
+            read_btf<btf_var_secinfo_t>(btf, offset, type_start, type_end);
         btf_kind_data_member member;
         member.type = btf_section_info.type;
         member.offset = btf_section_info.offset;
@@ -405,7 +401,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
     case BTF_KIND_DECL_TAG: {
       btf_kind_decl_tag kind_decl_tag;
       auto btf_decl_tag =
-          _read_btf<btf_decl_tag_t>(btf, offset, type_start, type_end);
+          read_btf<btf_decl_tag_t>(btf, offset, type_start, type_end);
       kind_decl_tag.name = name.value();
       kind_decl_tag.type = btf_type.type;
       kind_decl_tag.component_index = btf_decl_tag.component_idx;
@@ -424,7 +420,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
       btf_kind_enum64 kind_enum;
       for (uint32_t index = 0; index < enum_count; index++) {
         auto btf_enum64 =
-            _read_btf<btf_enum64_t>(btf, offset, type_start, type_end);
+            read_btf<btf_enum64_t>(btf, offset, type_start, type_end);
         btf_kind_enum64_member member;
         member.name = _btf_find_string(string_table, btf_enum64.name_off);
         member.value = (static_cast<uint64_t>(btf_enum64.val_hi32) << 32) |
@@ -438,7 +434,8 @@ void btf_parse_types(const std::vector<std::byte> &btf,
       break;
     }
     default:
-      throw std::runtime_error("Invalid .BTF section - invalid BTF_KIND");
+      throw std::runtime_error("Invalid .BTF section - invalid BTF_KIND - " +
+                               std::to_string(kind.index()));
     }
     visitor(++id, name, kind);
   }

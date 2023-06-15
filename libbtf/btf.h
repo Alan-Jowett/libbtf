@@ -183,6 +183,31 @@ struct btf_kind_enum64 {
 
 struct btf_kind_null {};
 
+template <typename T> struct btf_kind_traits {
+  constexpr static bool has_optional_name = requires(const T &value) {
+    value.name.has_value();
+  };
+  constexpr static bool has_name = requires(const T &value) { value.name; };
+  constexpr static bool has_members = requires(const T &value) {
+    value.members.size();
+  };
+  constexpr static bool has_parameters = requires(const T &value) {
+    value.parameters.size();
+  };
+  constexpr static bool has_return_type = requires(const T &value) {
+    value.return_type != 0;
+  };
+  constexpr static bool has_type = requires(const T &value) {
+    value.type != 0;
+  };
+  constexpr static bool has_size_in_bytes = requires(const T &value) {
+    value.size_in_bytes;
+  };
+  constexpr static bool has_linkage = requires(const T &value) {
+    value.linkage;
+  };
+};
+
 // Note: The order of the variant types must match the order in the enum above.
 using btf_kind = std::variant<
     btf_kind_null, btf_kind_int, btf_kind_ptr, btf_kind_array, btf_kind_struct,
