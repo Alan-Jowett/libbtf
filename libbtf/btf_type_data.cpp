@@ -205,7 +205,10 @@ std::vector<std::byte> btf_type_data::to_bytes() const {
 }
 
 void btf_type_data::append(const btf_kind &kind) {
-  btf_type_id next_id = id_to_kind.size();
+  if (id_to_kind.size() > UINT32_MAX) {
+    throw std::runtime_error("Too many BTF types");
+  }
+  btf_type_id next_id = static_cast<btf_type_id>(id_to_kind.size());
   id_to_kind.insert({next_id, kind});
   switch (kind.index()) {
   case BTF_KIND_INT:
