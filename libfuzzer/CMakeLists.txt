@@ -1,8 +1,9 @@
 # Copyright (c) 2023 Microsoft Corporation.
 # SPDX-License-Identifier: MIT
 
-set(CMAKE_C_COMPILER clang)
-set(CMAKE_CXX_COMPILER clang)
+find_program(CLANG clang)
+set(CMAKE_C_COMPILER ${CLANG})
+set(CMAKE_CXX_COMPILER ${CLANG})
 
 Include(FetchContent)
 
