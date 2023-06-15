@@ -17,8 +17,11 @@
 extern "C" int LLVMFuzzerInitialize(int *, char ***) { return 0; }
 
 extern "C" int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  std::string input(reinterpret_cast<const char *>(data), size);
+  std::istringstream iss(input);
+
   ELFIO::elfio reader;
-  if (!reader.load(argv[1])) {
+  if (!reader.load(iss)) {
     return 1;
   }
 
