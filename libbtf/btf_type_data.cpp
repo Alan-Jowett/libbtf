@@ -45,12 +45,7 @@ btf_kind btf_type_data::get_kind(btf_type_id id) const {
 }
 
 btf_type_id btf_type_data::dereference_pointer(btf_type_id id) const {
-  auto kind = get_kind(id);
-  if (kind.index() != BTF_KIND_PTR) {
-    throw std::runtime_error("BTF type is not a pointer: " +
-                             std::to_string(id));
-  }
-  return std::get<BTF_KIND_PTR>(kind).type;
+  return get_kind_type<btf_kind_ptr>(id).type;
 }
 
 size_t btf_type_data::get_size(btf_type_id id) const {
@@ -204,15 +199,29 @@ std::vector<std::byte> btf_type_data::to_bytes() const {
   return btf_write_types(kinds);
 }
 
-void btf_type_data::append(const btf_kind &kind) {
+void btf_type_data::replace(btf_type_id id, const btf_kind &kind) {
+  if (id_to_kind.find(id) == id_to_kind.end()) {
+    throw std::runtime_error("BTF type not found: " + std::to_string(id));
+  }
+
+  id_to_kind[id] = kind;
+  update_name_to_id(id, kind);
+}
+
+btf_type_id btf_type_data::append(const btf_kind &kind) {
   if (id_to_kind.size() > UINT32_MAX) {
     throw std::runtime_error("Too many BTF types");
   }
   btf_type_id next_id = static_cast<btf_type_id>(id_to_kind.size());
   id_to_kind.insert({next_id, kind});
+  update_name_to_id(next_id, kind);
+  return next_id;
+}
+
+void btf_type_data::update_name_to_id(btf_type_id id, const btf_kind &kind) {
   switch (kind.index()) {
   case BTF_KIND_INT:
-    name_to_id.insert({std::get<BTF_KIND_INT>(kind).name, next_id});
+    name_to_id.insert({std::get<BTF_KIND_INT>(kind).name, id});
     break;
   case BTF_KIND_PTR:
     break;
@@ -220,25 +229,24 @@ void btf_type_data::append(const btf_kind &kind) {
     break;
   case BTF_KIND_STRUCT:
     if (std::get<BTF_KIND_STRUCT>(kind).name.has_value()) {
-      name_to_id.insert(
-          {std::get<BTF_KIND_STRUCT>(kind).name.value(), next_id});
+      name_to_id.insert({std::get<BTF_KIND_STRUCT>(kind).name.value(), id});
     }
     break;
   case BTF_KIND_UNION:
     if (std::get<BTF_KIND_UNION>(kind).name.has_value()) {
-      name_to_id.insert({std::get<BTF_KIND_UNION>(kind).name.value(), next_id});
+      name_to_id.insert({std::get<BTF_KIND_UNION>(kind).name.value(), id});
     }
     break;
   case BTF_KIND_ENUM:
     if (std::get<BTF_KIND_ENUM>(kind).name.has_value()) {
-      name_to_id.insert({std::get<BTF_KIND_ENUM>(kind).name.value(), next_id});
+      name_to_id.insert({std::get<BTF_KIND_ENUM>(kind).name.value(), id});
     }
     break;
   case BTF_KIND_FWD:
-    name_to_id.insert({std::get<BTF_KIND_FWD>(kind).name, next_id});
+    name_to_id.insert({std::get<BTF_KIND_FWD>(kind).name, id});
     break;
   case BTF_KIND_TYPEDEF:
-    name_to_id.insert({std::get<BTF_KIND_TYPEDEF>(kind).name, next_id});
+    name_to_id.insert({std::get<BTF_KIND_TYPEDEF>(kind).name, id});
     break;
   case BTF_KIND_VOLATILE:
     break;
@@ -247,31 +255,31 @@ void btf_type_data::append(const btf_kind &kind) {
   case BTF_KIND_RESTRICT:
     break;
   case BTF_KIND_FUNCTION:
-    name_to_id.insert({std::get<BTF_KIND_FUNCTION>(kind).name, next_id});
+    name_to_id.insert({std::get<BTF_KIND_FUNCTION>(kind).name, id});
     break;
   case BTF_KIND_FUNCTION_PROTOTYPE:
     break;
   case BTF_KIND_VAR:
-    name_to_id.insert({std::get<BTF_KIND_VAR>(kind).name, next_id});
+    name_to_id.insert({std::get<BTF_KIND_VAR>(kind).name, id});
     break;
   case BTF_KIND_DATA_SECTION:
-    name_to_id.insert({std::get<BTF_KIND_DATA_SECTION>(kind).name, next_id});
+    name_to_id.insert({std::get<BTF_KIND_DATA_SECTION>(kind).name, id});
     break;
   case BTF_KIND_FLOAT:
-    name_to_id.insert({std::get<BTF_KIND_FLOAT>(kind).name, next_id});
+    name_to_id.insert({std::get<BTF_KIND_FLOAT>(kind).name, id});
     break;
   case BTF_KIND_DECL_TAG:
-    name_to_id.insert({std::get<BTF_KIND_DECL_TAG>(kind).name, next_id});
+    name_to_id.insert({std::get<BTF_KIND_DECL_TAG>(kind).name, id});
     break;
   case BTF_KIND_TYPE_TAG:
-    name_to_id.insert({std::get<BTF_KIND_TYPE_TAG>(kind).name, next_id});
+    name_to_id.insert({std::get<BTF_KIND_TYPE_TAG>(kind).name, id});
     break;
   case BTF_KIND_ENUM64:
     if (std::get<BTF_KIND_ENUM64>(kind).name.has_value()) {
-      name_to_id.insert(
-          {std::get<BTF_KIND_ENUM64>(kind).name.value(), next_id});
+      name_to_id.insert({std::get<BTF_KIND_ENUM64>(kind).name.value(), id});
     }
     break;
   }
 }
+
 } // namespace libbtf
