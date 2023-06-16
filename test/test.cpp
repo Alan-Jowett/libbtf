@@ -53,7 +53,7 @@ void verify_BTF_json(const std::string &file) {
   // Get the size of each type.
   for (libbtf::btf_type_id id = 1; id <= btf_data.last_type_id(); id++) {
     size_t size = btf_data.get_size(id);
-    switch (btf_data.get_kind(id).index()) {
+    switch (btf_data.get_kind_index(id)) {
     // Non-zero sized types.
     case libbtf::BTF_KIND_INT:
     case libbtf::BTF_KIND_PTR:
@@ -78,7 +78,7 @@ void verify_BTF_json(const std::string &file) {
       break;
     // Array can be zero sized if there are no elements.
     case libbtf::BTF_KIND_ARRAY: {
-      auto array = std::get<libbtf::BTF_KIND_ARRAY>(btf_data.get_kind(id));
+      auto array = btf_data.get_kind_type<libbtf::btf_kind_array>(id);
       REQUIRE(size ==
               array.count_of_elements * btf_data.get_size(array.element_type));
       break;
@@ -543,7 +543,7 @@ TEST_CASE("btf_maps", "[parsing][json]") {
 
 TEST_CASE("get_unknown_type_id", "[btf_type_data][negative]") {
   libbtf::btf_type_data btf_data;
-  REQUIRE_THROWS(btf_data.get_kind(1));
+  REQUIRE_THROWS(btf_data.get_kind_index(1));
 }
 
 TEST_CASE("get_type_by_name_unknown", "[btf_type_data][negative]") {
@@ -555,4 +555,44 @@ TEST_CASE("dereference_non_pointer", "[btf_type_data][negative]") {
   libbtf::btf_type_data btf_data;
   btf_data.append(libbtf::btf_kind_int{.name = "int_type", .size_in_bytes = 8});
   REQUIRE_THROWS(btf_data.dereference_pointer(1));
+}
+
+TEST_CASE("build_btf_map_section", "[btf_type_data]") {
+  std::vector<libbtf::btf_map_definition> map_definitions;
+  map_definitions.push_back(
+      libbtf::btf_map_definition{.name = "array_of_maps",
+                                 .type_id = 1,
+                                 .map_type = 12, // BPF_MAP_TYPE_ARRAY_OF_MAPS
+                                 .key_size = 4,
+                                 .value_size = 0,
+                                 .max_entries = 1,
+                                 .inner_map_type_id = 2});
+
+  map_definitions.push_back(
+      libbtf::btf_map_definition{.name = "inner_map",
+                                 .type_id = 2,
+                                 .map_type = 2, // BPF_MAP_TYPE_ARRAY
+                                 .key_size = 4,
+                                 .value_size = 4,
+                                 .max_entries = 1,
+                                 .inner_map_type_id = 0});
+  libbtf::btf_type_data btf_data;
+  libbtf::build_btf_map_section(map_definitions, btf_data);
+
+  std::vector<libbtf::btf_map_definition> generated_map_definitions =
+      libbtf::parse_btf_map_section(btf_data);
+  REQUIRE(generated_map_definitions.size() == map_definitions.size());
+  for (size_t i = 0; i < generated_map_definitions.size(); i++) {
+    REQUIRE(generated_map_definitions[i].name == map_definitions[i].name);
+    REQUIRE(generated_map_definitions[i].map_type ==
+            map_definitions[i].map_type);
+    REQUIRE(generated_map_definitions[i].key_size ==
+            map_definitions[i].key_size);
+    REQUIRE(generated_map_definitions[i].value_size ==
+            map_definitions[i].value_size);
+    REQUIRE(generated_map_definitions[i].max_entries ==
+            map_definitions[i].max_entries);
+  }
+  REQUIRE(generated_map_definitions[0].inner_map_type_id ==
+          generated_map_definitions[1].type_id);
 }
