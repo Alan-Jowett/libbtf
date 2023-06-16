@@ -11,7 +11,8 @@
 #include <vector>
 
 #define LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(INDEX, TYPE)                        \
-  template <> TYPE get_kind_type<TYPE>(btf_type_id id) const {                 \
+  template <>                                                                  \
+  inline TYPE btf_type_data::get_kind_type<TYPE>(btf_type_id id) const {       \
     auto kind = get_kind(id);                                                  \
     if (kind.index() != INDEX) {                                               \
       throw std::runtime_error(std::string("Wrong type: Expected ") +          \
@@ -68,29 +69,6 @@ public:
    */
   template <class T> T get_kind_type(btf_type_id id) const;
 
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_NULL, btf_kind_null)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_INT, btf_kind_int)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_PTR, btf_kind_ptr)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_ARRAY, btf_kind_array)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_STRUCT, btf_kind_struct)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_UNION, btf_kind_union)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_ENUM, btf_kind_enum)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_FWD, btf_kind_fwd)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_TYPEDEF, btf_kind_typedef)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_VOLATILE, btf_kind_volatile)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_CONST, btf_kind_const)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_RESTRICT, btf_kind_restrict)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_FUNCTION, btf_kind_function)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_FUNCTION_PROTOTYPE,
-                                     btf_kind_function_prototype)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_VAR, btf_kind_var)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_DATA_SECTION,
-                                     btf_kind_data_section)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_FLOAT, btf_kind_float)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_DECL_TAG, btf_kind_decl_tag)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_TYPE_TAG, btf_kind_type_tag)
-  LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_ENUM64, btf_kind_enum64)
-
   btf_type_id dereference_pointer(btf_type_id id) const;
   size_t get_size(btf_type_id id) const;
   void to_json(std::ostream &out) const;
@@ -114,4 +92,26 @@ private:
   std::map<btf_type_id, btf_kind> id_to_kind;
   std::map<std::string, btf_type_id> name_to_id;
 };
+
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_NULL, btf_kind_null)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_INT, btf_kind_int)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_PTR, btf_kind_ptr)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_ARRAY, btf_kind_array)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_STRUCT, btf_kind_struct)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_UNION, btf_kind_union)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_ENUM, btf_kind_enum)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_FWD, btf_kind_fwd)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_TYPEDEF, btf_kind_typedef)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_VOLATILE, btf_kind_volatile)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_CONST, btf_kind_const)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_RESTRICT, btf_kind_restrict)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_FUNCTION, btf_kind_function)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_FUNCTION_PROTOTYPE,
+                                   btf_kind_function_prototype)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_VAR, btf_kind_var)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_DATA_SECTION, btf_kind_data_section)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_FLOAT, btf_kind_float)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_DECL_TAG, btf_kind_decl_tag)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_TYPE_TAG, btf_kind_type_tag)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_ENUM64, btf_kind_enum64)
 } // namespace libbtf
