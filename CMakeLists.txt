@@ -17,6 +17,11 @@ include("cmake/version.cmake")
 add_subdirectory("libbtf")
 
 if(BTF_ENABLE_TESTS)
+# Suppress C4702 for MSVC
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4702")
+endif()
+
   add_subdirectory("test")
 endif()
 

@@ -16,7 +16,13 @@
 #include "btf_parse.h"
 #include "btf_type_data.h"
 #include "btf_write.h"
+
+// Suppress some W4 warnings from the elfio library.
+#pragma warning(push)
+#pragma warning(disable : 4244)
+#pragma warning(disable : 4458)
 #include "elfio/elfio.hpp"
+#pragma warning(pop)
 
 #define TEST_OBJECT_FILE_DIRECTORY "external/ebpf-samples/build/"
 #define TEST_SOURCE_FILE_DIRECTORY "external/ebpf-samples/src/"
@@ -147,6 +153,10 @@ void verify_line_info(const std::string &file) {
       [&](const std::string &section, uint32_t instruction_offset,
           const std::string &file_name, const std::string &source,
           uint32_t line_number, uint32_t column_number) {
+        // column_number is not used.
+        (void)column_number;
+        // instruction_offset is not used.
+        (void)instruction_offset;
         if (!source.empty()) {
           // Removing any trailing whitespace.
           std::string stripped_source =

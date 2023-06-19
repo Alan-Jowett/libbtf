@@ -86,7 +86,7 @@ _btf_parse_string_table(const std::vector<std::byte> &btf) {
 
   validate_range(btf, string_table_start, string_table_end);
 
-  for (size_t offset = string_table_start; offset < string_table_end;) {
+  for (offset = string_table_start; offset < string_table_end;) {
     size_t string_offset = offset - string_table_start;
     std::string value = read_btf<std::string>(btf, offset, string_table_start,
                                               string_table_end);
@@ -145,6 +145,12 @@ void btf_parse_line_information(const std::vector<std::byte> &btf,
         "Invalid .BTF.ext section - invalid line info record size"));
   }
 
+// Suppress warning C4815 on MSVC
+// section_info is declared on the stack, but its size depends on the number of
+// elements in the section. This is not a problem, because the number the code
+// only uses the header.
+#pragma warning(push)
+#pragma warning(disable : 4815)
   for (; btf_ext_offset < line_info_end;) {
     auto section_info = read_btf<btf_ext_info_sec_t>(
         btf_ext, btf_ext_offset, line_info_start, line_info_end);
@@ -161,6 +167,7 @@ void btf_parse_line_information(const std::vector<std::byte> &btf,
               BPF_LINE_INFO_LINE_COL(btf_line_info.line_col));
     }
   }
+#pragma warning(pop)
 }
 
 void btf_parse_types(const std::vector<std::byte> &btf,
@@ -192,7 +199,6 @@ void btf_parse_types(const std::vector<std::byte> &btf,
   btf_kind_null kind_null;
   visitor(0, "void", {kind_null});
 
-  size_t type_offset = type_start;
   for (offset = type_start; offset < type_end;) {
     std::optional<std::string> name;
     auto btf_type = read_btf<btf_type_t>(btf, offset, type_start, type_end);
