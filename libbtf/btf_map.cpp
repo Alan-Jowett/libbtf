@@ -71,21 +71,21 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
 
   // Optional fields.
   if (key) {
-    size_t key_size = btf_types.get_size(key);
+    size_t key_size_in_bytes = btf_types.get_size(key);
     if (key_size > UINT32_MAX) {
       throw std::runtime_error("key size too large");
     }
-    map_definition.key_size = static_cast<uint32_t>(key_size);
+    map_definition.key_size = static_cast<uint32_t>(key_size_in_bytes);
   } else if (key_size) {
     map_definition.key_size = _value_from_BTF__uint(btf_types, key_size);
   }
 
   if (value) {
-    size_t value_size = btf_types.get_size(value);
+    size_t value_size_in_bytes = btf_types.get_size(value);
     if (value_size > UINT32_MAX) {
       throw std::runtime_error("value size too large");
     }
-    map_definition.value_size = static_cast<uint32_t>(value_size);
+    map_definition.value_size = static_cast<uint32_t>(value_size_in_bytes);
   } else if (value_size) {
     map_definition.value_size = _value_from_BTF__uint(btf_types, value_size);
   }
@@ -109,7 +109,6 @@ parse_btf_map_section(const btf_type_data &btf_data) {
   auto maps_section =
       btf_data.get_kind_type<btf_kind_data_section>(btf_data.get_id(".maps"));
 
-  size_t index = 0;
   for (const auto &var : maps_section.members) {
     map_definitions.push_back(_get_map_definition_from_btf(btf_data, var.type));
   }
@@ -184,7 +183,7 @@ btf_type_id build_btf_map(btf_type_data &btf_data,
 
   for (auto &member : map.members) {
     member.offset_from_start_in_bits = offset_in_bits;
-    offset_in_bits += btf_data.get_size(member.type) * 8;
+    offset_in_bits += static_cast<uint32_t>(btf_data.get_size(member.type) * 8);
   }
 
   map.size_in_bytes = offset_in_bits / 8;

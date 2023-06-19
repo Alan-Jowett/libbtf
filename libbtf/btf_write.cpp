@@ -83,10 +83,10 @@ std::vector<std::byte> btf_write_types(const std::vector<btf_kind> &btf_kind) {
             btf_type.type = value.type;
           }
           if constexpr (btf_kind_traits<decltype(value)>::has_members) {
-            vlen = value.members.size();
+            vlen = static_cast<uint32_t>(value.members.size());
           }
           if constexpr (btf_kind_traits<decltype(value)>::has_parameters) {
-            vlen = value.parameters.size();
+            vlen = static_cast<uint32_t>(value.parameters.size());
           }
           if constexpr (btf_kind_traits<decltype(value)>::has_size_in_bytes) {
             btf_type.size = value.size_in_bytes;

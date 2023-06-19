@@ -136,6 +136,11 @@ void print_array_end(std::ostream &out) { out << "]"; }
   out << "}";                                                                  \
   }
 
+// Suppress C4456 on when using MSVC:
+// declaration of 'first' hides previous local declaration
+#pragma warning(push)
+#pragma warning(disable : 4456)
+
 void btf_type_to_json(const std::map<btf_type_id, btf_kind> &id_to_kind,
                       std::ostream &out) {
   std::function<void(btf_type_id, const btf_kind &)> print_btf_kind =
@@ -449,5 +454,7 @@ void btf_type_to_json(const std::map<btf_type_id, btf_kind> &id_to_kind,
   PRINT_JSON_ARRAY_END();
   PRINT_JSON_OBJECT_END();
 }
+
+#pragma warning(pop)
 
 } // namespace libbtf
