@@ -25,6 +25,10 @@ endif()
   add_subdirectory("test")
 endif()
 
+if(BTF_DUMP)
+  add_subdirectory("dump")
+endif()
+
 if (BTF_ENABLE_FUZZING)
   add_subdirectory("libfuzzer")
 endif()
