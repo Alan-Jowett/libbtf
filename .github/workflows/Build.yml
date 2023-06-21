@@ -51,7 +51,7 @@ jobs:
     - name: Configure CMake
       if: inputs.platform == 'windows-2019' || inputs.platform == 'windows-2022'
       run: |
-        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DBTF_ENABLE_TESTS=TRUE
+        cmake -B ${{github.workspace}}/build -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -DBTF_ENABLE_TESTS=TRUE -DBTF_WARNING_AS_ERROR=TRUE
 
     - name: Configure CMake
       if: inputs.platform == 'ubuntu-22.04' || inputs.platform == 'macos-11'
