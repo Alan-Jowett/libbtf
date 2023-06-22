@@ -10,6 +10,7 @@ option(BTF_ENABLE_TESTS "Set to true to enable tests")
 option(BTF_INSTALL_GIT_HOOKS "Set to true to install git hooks" ON)
 option(BTF_ENABLE_FUZZING "Set to true to enable fuzzing")
 option(BTF_DUMP "Set to true to build the dump tool")
+option(BTF_WARNING_AS_ERROR "Set to true to enable warnings as errors")
 
 # Note that the compile_commands.json file is only exporter when
 # using the Ninja or Makefile generator
@@ -27,5 +28,8 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR
 
   set(SANITIZE_FLAGS -fsanitize=address -O1 -fno-omit-frame-pointer)
 elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "MSVC")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++20 /W4 /WX")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++20 /W4")
+  if (BTF_WARNING_AS_ERROR)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /WX")
+  endif()
 endif ()
