@@ -5,8 +5,10 @@
 
 #include "btf.h"
 
+#include <functional>
 #include <iostream>
 #include <map>
+#include <optional>
 #include <string>
 
 namespace libbtf {
@@ -18,8 +20,9 @@ namespace libbtf {
  * @param[in] id_to_kind A map of btf_type_id to btf_kind.
  * @param[in,out] out The output stream to write the JSON to.
  */
-void btf_type_to_json(const std::map<btf_type_id, btf_kind> &id_to_kind,
-                      std::ostream &out);
+void btf_type_to_json(
+    const std::map<btf_type_id, btf_kind> &id_to_kind, std::ostream &out,
+    std::optional<std::function<bool(btf_type_id)>> filter = std::nullopt);
 
 /**
  * @brief Helper function to insert line breaks and indentation into a JSON

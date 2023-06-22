@@ -98,8 +98,10 @@ size_t btf_type_data::get_size(btf_type_id id) const {
   }
 }
 
-void btf_type_data::to_json(std::ostream &out) const {
-  btf_type_to_json(id_to_kind, out);
+void btf_type_data::to_json(
+    std::ostream &out,
+    std::optional<std::function<bool(btf_type_id)>> filter) const {
+  btf_type_to_json(id_to_kind, out, filter);
 }
 
 void btf_type_data::validate_type_graph(btf_type_id id,

@@ -4,7 +4,9 @@
 #pragma once
 #include "btf.h"
 
+#include <functional>
 #include <map>
+#include <optional>
 #include <set>
 #include <stdexcept>
 #include <string>
@@ -71,7 +73,9 @@ public:
 
   btf_type_id dereference_pointer(btf_type_id id) const;
   size_t get_size(btf_type_id id) const;
-  void to_json(std::ostream &out) const;
+  void
+  to_json(std::ostream &out,
+          std::optional<std::function<bool(btf_type_id)>> = std::nullopt) const;
   std::vector<std::byte> to_bytes() const;
   btf_type_id append(const btf_kind &kind);
   void replace(btf_type_id id, const btf_kind &kind);

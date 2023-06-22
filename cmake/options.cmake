@@ -9,6 +9,7 @@ endif()
 option(BTF_ENABLE_TESTS "Set to true to enable tests")
 option(BTF_INSTALL_GIT_HOOKS "Set to true to install git hooks" ON)
 option(BTF_ENABLE_FUZZING "Set to true to enable fuzzing")
+option(BTF_DUMP "Set to true to build the dump tool")
 option(BTF_WARNING_AS_ERROR "Set to true to enable warnings as errors")
 
 # Note that the compile_commands.json file is only exporter when

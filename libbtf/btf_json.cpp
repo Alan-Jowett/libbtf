@@ -142,7 +142,8 @@ void print_array_end(std::ostream &out) { out << "]"; }
 #pragma warning(disable : 4456)
 
 void btf_type_to_json(const std::map<btf_type_id, btf_kind> &id_to_kind,
-                      std::ostream &out) {
+                      std::ostream &out,
+                      std::optional<std::function<bool(btf_type_id)>> filter) {
   std::function<void(btf_type_id, const btf_kind &)> print_btf_kind =
       [&](btf_type_id id, const btf_kind &kind) {
         bool first = true;
@@ -382,6 +383,13 @@ void btf_type_to_json(const std::map<btf_type_id, btf_kind> &id_to_kind,
 
   // Remove all types that are referenced by other types.
   for (auto &[id, kind] : id_to_kind) {
+    if (filter.has_value()) {
+      if (!(*filter)(id)) {
+        root_types.erase(id);
+      }
+      continue;
+    }
+
     switch (kind.index()) {
     case BTF_KIND_PTR:
       root_types.erase(std::get<BTF_KIND_PTR>(kind).type);
