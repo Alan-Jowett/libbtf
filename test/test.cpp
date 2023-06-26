@@ -3,6 +3,7 @@
 #include <catch2/catch_all.hpp>
 
 #include <map>
+#include <regex>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,20 @@
 #include "elfio/elfio.hpp"
 #pragma warning(pop)
 
+std::map<std::string, std::string> string_replacements = {
+    // ebpf-samples JSON incorrectly swapped static and global.
+    {"BTF_LINKAGE_STATIC", "BTF_LINKAGE_GLOBAL"},
+    {"BTF_LINKAGE_GLOBAL", "BTF_LINKAGE_STATIC"},
+    // BTF_KIND_FUNC renamed to BTF_KIND_FUNCTION
+    {"BTF_KIND_FUNC", "BTF_KIND_FUNCTION"},
+    // BTF_KIND_FUNC renamed to BTF_KIND_FUNCTION
+    {"BTF_KIND_FUNCTION_PROTO", "BTF_KIND_FUNCTION_PROTOTYPE"},
+    // BTF_FUNC_GLOBAL renamed to BTF_LINKAGE_GLOBAL
+    {"BTF_FUNC_GLOBAL", "BTF_LINKAGE_GLOBAL"},
+    // BTF_KIND_DATASEC renamed to BTF_KIND_DATA_SECTION
+    {"BTF_KIND_DATASEC", "BTF_KIND_DATA_SECTION"},
+};
+
 #define TEST_OBJECT_FILE_DIRECTORY "external/ebpf-samples/build/"
 #define TEST_SOURCE_FILE_DIRECTORY "external/ebpf-samples/src/"
 #define TEST_JSON_FILE_DIRECTORY "external/ebpf-samples/json/"
@@ -32,7 +47,7 @@
   TEST_CASE("BTF JSON suite: " file, "[json]") { verify_BTF_json(file); }      \
   TEST_CASE("BTF LINE_INFO suite: " file, "[line_info]") {                     \
     verify_line_info(file);                                                    \
-  } \
+  }                                                                            \
   TEST_CASE("BTF C header suite: " file, "[c_header]") {                       \
     verify_c_header(file);                                                     \
   }
@@ -43,6 +58,10 @@ void verify_line_by_line(std::istream &lhs, std::istream &rhs) {
   while (std::getline(lhs, lhs_line)) {
     bool has_more = (bool)std::getline(rhs, rhs_line);
     REQUIRE(has_more);
+    for (const auto &[old_string, new_string] : string_replacements) {
+      lhs_line =
+          std::regex_replace(lhs_line, std::regex(old_string), new_string);
+    }
     REQUIRE(lhs_line == rhs_line);
   }
   bool has_more = (bool)std::getline(rhs, rhs_line);
@@ -182,8 +201,7 @@ void verify_line_info(const std::string &file) {
       });
 }
 
-void verify_c_header(const std::string &file)
-{
+void verify_c_header(const std::string &file) {
   std::stringstream generated_output;
   auto reader = ELFIO::elfio();
   REQUIRE(reader.load(std::string(TEST_OBJECT_FILE_DIRECTORY) + file + ".o"));
@@ -197,8 +215,8 @@ void verify_c_header(const std::string &file)
   btf_data.to_c_header(generated_output);
 
   // Read the expected output from the .h file.
-  std::ifstream expected_stream(std::string(TEST_C_HEADER_FILE_DIRECTORY) + file +
-                                std::string(".h"));
+  std::ifstream expected_stream(std::string(TEST_C_HEADER_FILE_DIRECTORY) +
+                                file + std::string(".h"));
 
   verify_line_by_line(expected_stream, generated_output);
 }
@@ -268,6 +286,7 @@ TEST_CASE("enum_type", "[parsing][json]") {
                               "      \"kind_type\": \"BTF_KIND_ENUM\",\n"
                               "      \"name\": \"enum_type\",\n"
                               "      \"size_in_bytes\": 0,\n"
+                              "      \"is_signed\": false,\n"
                               "      \"members\": [\n"
                               "        {\n"
                               "          \"name\": \"A\",\n"
@@ -322,6 +341,7 @@ TEST_CASE("enum64_type", "[parsing][json]") {
                               "      \"kind_type\": \"BTF_KIND_ENUM64\",\n"
                               "      \"name\": \"enum_type\",\n"
                               "      \"size_in_bytes\": 0,\n"
+                              "      \"is_signed\": false,\n"
                               "      \"members\": [\n"
                               "        {\n"
                               "          \"name\": \"A\",\n"

@@ -136,10 +136,21 @@ void print_array_end(std::ostream &out) { out << "]"; }
   out << "}";                                                                  \
   }
 
+#define PRINT_JSON_VALUE_IF_PRESENT(object, value)                             \
+  if constexpr (btf_kind_traits<decltype(object)>::has_##value) {              \
+    PRINT_JSON_VALUE(object, value);                                           \
+  }
+
+#define PRINT_JSON_TYPE_IF_PRESENT(object, value)                              \
+  if constexpr (btf_kind_traits<decltype(object)>::has_##value) {              \
+    PRINT_JSON_TYPE(object, value);                                            \
+  }
+
 // Suppress C4456 on when using MSVC:
 // declaration of 'first' hides previous local declaration
 #pragma warning(push)
 #pragma warning(disable : 4456)
+#pragma warning(disable : 4458)
 
 void btf_type_to_json(const std::map<btf_type_id, btf_kind> &id_to_kind,
                       std::ostream &out,
@@ -149,223 +160,63 @@ void btf_type_to_json(const std::map<btf_type_id, btf_kind> &id_to_kind,
         bool first = true;
         PRINT_JSON_OBJECT_START();
         PRINT_JSON_FIXED("id", id);
-        switch (kind.index()) {
-        case 0:
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_VOID");
-          break;
-        case BTF_KIND_INT: {
-          auto &kind_int = std::get<BTF_KIND_INT>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_INT");
-          PRINT_JSON_VALUE(kind_int, name);
-          PRINT_JSON_VALUE(kind_int, size_in_bytes);
-          PRINT_JSON_VALUE(kind_int, offset_from_start_in_bits);
-          PRINT_JSON_VALUE(kind_int, field_width_in_bits);
-          PRINT_JSON_VALUE(kind_int, is_signed);
-          PRINT_JSON_VALUE(kind_int, is_char);
-          PRINT_JSON_VALUE(kind_int, is_bool);
-          break;
-        }
-        case BTF_KIND_PTR: {
-          auto &kind_ptr = std::get<BTF_KIND_PTR>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_PTR");
-          PRINT_JSON_TYPE(kind_ptr, type);
-          break;
-        }
-        case BTF_KIND_ARRAY: {
-          auto &kind_array = std::get<BTF_KIND_ARRAY>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_ARRAY");
-          PRINT_JSON_VALUE(kind_array, count_of_elements);
-          PRINT_JSON_TYPE(kind_array, element_type);
-          PRINT_JSON_TYPE(kind_array, index_type);
-          break;
-        }
-        case BTF_KIND_STRUCT: {
-          auto &kind_struct = std::get<BTF_KIND_STRUCT>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_STRUCT");
-          PRINT_JSON_VALUE(kind_struct, name);
-          PRINT_JSON_VALUE(kind_struct, size_in_bytes);
-          PRINT_JSON_ARRAY_START(kind_struct, members);
-          for (auto &member : kind_struct.members) {
-            PRINT_JSON_OBJECT_START();
-            PRINT_JSON_VALUE(member, name);
-            PRINT_JSON_VALUE(member, offset_from_start_in_bits);
-            PRINT_JSON_TYPE(member, type);
-            PRINT_JSON_OBJECT_END();
-          }
-          PRINT_JSON_ARRAY_END();
-          break;
-        }
-        case BTF_KIND_UNION: {
-          auto kind_union = std::get<BTF_KIND_UNION>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_UNION");
-          PRINT_JSON_VALUE(kind_union, name);
-          PRINT_JSON_VALUE(kind_union, size_in_bytes);
-          PRINT_JSON_ARRAY_START(kind_union, members);
-          for (auto &member : kind_union.members) {
-            PRINT_JSON_OBJECT_START();
-            PRINT_JSON_VALUE(member, name);
-            PRINT_JSON_VALUE(member, offset_from_start_in_bits);
-            PRINT_JSON_TYPE(member, type);
-            PRINT_JSON_OBJECT_END();
-          }
-          PRINT_JSON_ARRAY_END();
-          break;
-        }
-        case BTF_KIND_ENUM: {
-          auto &kind_enum = std::get<BTF_KIND_ENUM>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_ENUM");
-          PRINT_JSON_VALUE(kind_enum, name);
-          PRINT_JSON_VALUE(kind_enum, size_in_bytes);
-          PRINT_JSON_ARRAY_START(kind_union, members);
-          for (auto &member : kind_enum.members) {
-            PRINT_JSON_OBJECT_START();
-            PRINT_JSON_VALUE(member, name);
-            PRINT_JSON_VALUE(member, value);
-            PRINT_JSON_OBJECT_END();
-          }
-          PRINT_JSON_ARRAY_END();
-          break;
-        }
-        case BTF_KIND_FWD: {
-          auto kind_fwd = std::get<BTF_KIND_FWD>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_FWD");
-          PRINT_JSON_VALUE(kind_fwd, name);
-          PRINT_JSON_VALUE(kind_fwd, is_struct);
-          break;
-        }
-        case BTF_KIND_TYPEDEF: {
-          auto &kind_typedef = std::get<BTF_KIND_TYPEDEF>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_TYPEDEF");
-          PRINT_JSON_VALUE(kind_typedef, name);
-          PRINT_JSON_TYPE(kind_typedef, type);
-          break;
-        }
-        case BTF_KIND_VOLATILE: {
-          auto &kind_volatile = std::get<BTF_KIND_VOLATILE>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_VOLATILE");
-          PRINT_JSON_TYPE(kind_volatile, type);
-          break;
-        }
-        case BTF_KIND_CONST: {
-          auto &kind_const = std::get<BTF_KIND_CONST>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_CONST");
-          PRINT_JSON_TYPE(kind_const, type);
-          break;
-        }
-        case BTF_KIND_RESTRICT: {
-          auto &kind_restrict = std::get<BTF_KIND_RESTRICT>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_RESTRICT");
-          PRINT_JSON_TYPE(kind_restrict, type);
-          break;
-        }
-        case BTF_KIND_FUNCTION: {
-          auto kind_func = std::get<BTF_KIND_FUNCTION>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_FUNC");
-          PRINT_JSON_VALUE(kind_func, name);
-          switch (kind_func.linkage) {
-          case 0:
-            PRINT_JSON_FIXED("linkage", "BTF_FUNC_STATIC");
-            break;
-          case 1:
-            PRINT_JSON_FIXED("linkage", "BTF_FUNC_GLOBAL");
-            break;
-          case 2:
-            PRINT_JSON_FIXED("linkage", "BTF_FUNC_EXTERN");
-            break;
-          default:
-            PRINT_JSON_FIXED("linkage", "UNKNOWN");
-            break;
-          }
-          PRINT_JSON_TYPE(kind_func, type);
-          break;
-        }
-        case BTF_KIND_FUNCTION_PROTOTYPE: {
-          auto &kind_func_proto = std::get<BTF_KIND_FUNCTION_PROTOTYPE>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_FUNC_PROTO");
-          PRINT_JSON_ARRAY_START(kind_func_proto, parameters);
-          for (auto &parameter : kind_func_proto.parameters) {
-            PRINT_JSON_OBJECT_START();
-            PRINT_JSON_VALUE(parameter, name);
-            PRINT_JSON_TYPE(parameter, type);
-            PRINT_JSON_OBJECT_END();
-          }
-          PRINT_JSON_ARRAY_END();
-          PRINT_JSON_TYPE(kind_func_proto, return_type);
-          break;
-        }
-        case BTF_KIND_VAR: {
-          auto &kind_var = std::get<BTF_KIND_VAR>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_VAR");
-          PRINT_JSON_VALUE(kind_var, name);
-          switch (kind_var.linkage) {
-          case 0:
-            PRINT_JSON_FIXED("linkage", "BTF_LINKAGE_GLOBAL");
-            break;
-          case 1:
-            PRINT_JSON_FIXED("linkage", "BTF_LINKAGE_STATIC");
-            break;
-          default:
-            PRINT_JSON_FIXED("linkage", "UNKNOWN");
-            break;
-          }
-          PRINT_JSON_TYPE(kind_var, type);
-          break;
-        }
-        case BTF_KIND_DATA_SECTION: {
-          auto &kind_datasec = std::get<BTF_KIND_DATA_SECTION>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_DATASEC");
-          PRINT_JSON_VALUE(kind_datasec, name);
-          PRINT_JSON_VALUE(kind_datasec, size);
-          PRINT_JSON_ARRAY_START(kind_datasec, members);
-          for (auto &data : kind_datasec.members) {
-            PRINT_JSON_OBJECT_START();
-            PRINT_JSON_VALUE(data, offset);
-            PRINT_JSON_VALUE(data, size);
-            PRINT_JSON_TYPE(data, type);
-            PRINT_JSON_OBJECT_END();
-          }
-          PRINT_JSON_ARRAY_END();
-          break;
-        }
-        case BTF_KIND_FLOAT: {
-          auto kind_float = std::get<BTF_KIND_FLOAT>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_FLOAT");
-          PRINT_JSON_VALUE(kind_float, name);
-          PRINT_JSON_VALUE(kind_float, size_in_bytes);
-          break;
-        }
-        case BTF_KIND_DECL_TAG: {
-          auto &kind_decl_tag = std::get<BTF_KIND_DECL_TAG>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_DECL_TAG");
-          PRINT_JSON_VALUE(kind_decl_tag, name);
-          PRINT_JSON_TYPE(kind_decl_tag, type);
-          break;
-        }
-        case BTF_KIND_TYPE_TAG: {
-          auto &kind_type_tag = std::get<BTF_KIND_TYPE_TAG>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_TYPE_TAG");
-          PRINT_JSON_VALUE(kind_type_tag, name);
-          PRINT_JSON_TYPE(kind_type_tag, type);
-          break;
-        }
-        case BTF_KIND_ENUM64: {
-          auto &kind_enum = std::get<BTF_KIND_ENUM64>(kind);
-          PRINT_JSON_FIXED("kind_type", "BTF_KIND_ENUM64");
-          PRINT_JSON_VALUE(kind_enum, name);
-          PRINT_JSON_VALUE(kind_enum, size_in_bytes);
-          PRINT_JSON_ARRAY_START(kind_enum, members);
-          for (auto &member : kind_enum.members) {
-            PRINT_JSON_OBJECT_START();
-            PRINT_JSON_VALUE(member, name);
-            PRINT_JSON_VALUE(member, value);
-            PRINT_JSON_OBJECT_END();
-          }
-          PRINT_JSON_ARRAY_END();
-          break;
-        }
-        default:
-          PRINT_JSON_FIXED("kind_type", "UNKNOWN");
-        }
+        PRINT_JSON_FIXED("kind_type",
+                         BTF_KIND_INDEX_TO_STRING(
+                             static_cast<btf_kind_index>(kind.index())));
+
+        std::visit(
+            [&](auto &kind) {
+              // Print JSON values.
+              PRINT_JSON_VALUE_IF_PRESENT(kind, name);
+              if constexpr (btf_kind_traits<decltype(kind)>::has_linkage) {
+                PRINT_JSON_FIXED("linkage",
+                                 BTF_KIND_LINKAGE_TO_STRING(kind.linkage));
+              }
+              PRINT_JSON_VALUE_IF_PRESENT(kind, count_of_elements);
+              PRINT_JSON_VALUE_IF_PRESENT(kind, size_in_bytes);
+              PRINT_JSON_VALUE_IF_PRESENT(kind, size);
+              PRINT_JSON_VALUE_IF_PRESENT(kind, is_struct);
+              PRINT_JSON_VALUE_IF_PRESENT(kind, offset_from_start_in_bits);
+              PRINT_JSON_VALUE_IF_PRESENT(kind, field_width_in_bits);
+              PRINT_JSON_VALUE_IF_PRESENT(kind, is_signed);
+              PRINT_JSON_VALUE_IF_PRESENT(kind, is_char);
+              PRINT_JSON_VALUE_IF_PRESENT(kind, is_bool);
+
+              // Print JSON arrays.
+              if constexpr (btf_kind_traits<decltype(kind)>::has_members) {
+                PRINT_JSON_ARRAY_START(kind, members);
+                for (auto &member : kind.members) {
+                  PRINT_JSON_OBJECT_START();
+                  PRINT_JSON_VALUE_IF_PRESENT(member, name);
+                  PRINT_JSON_VALUE_IF_PRESENT(member, value);
+                  PRINT_JSON_VALUE_IF_PRESENT(member,
+                                              offset_from_start_in_bits);
+                  PRINT_JSON_VALUE_IF_PRESENT(member, offset);
+                  PRINT_JSON_VALUE_IF_PRESENT(member, size);
+                  PRINT_JSON_TYPE_IF_PRESENT(member, type);
+                  PRINT_JSON_OBJECT_END();
+                }
+                PRINT_JSON_ARRAY_END();
+              }
+
+              if constexpr (btf_kind_traits<decltype(kind)>::has_parameters) {
+                PRINT_JSON_ARRAY_START(kind, parameters);
+                for (auto &parameter : kind.parameters) {
+                  PRINT_JSON_OBJECT_START();
+                  PRINT_JSON_VALUE_IF_PRESENT(parameter, name);
+                  PRINT_JSON_TYPE_IF_PRESENT(parameter, type);
+                  PRINT_JSON_OBJECT_END();
+                }
+                PRINT_JSON_ARRAY_END();
+              }
+
+              // Print JSON child object.
+              PRINT_JSON_TYPE_IF_PRESENT(kind, type);
+              PRINT_JSON_TYPE_IF_PRESENT(kind, element_type);
+              PRINT_JSON_TYPE_IF_PRESENT(kind, index_type);
+              PRINT_JSON_TYPE_IF_PRESENT(kind, return_type);
+            },
+            kind);
         PRINT_JSON_OBJECT_END();
       };
 
@@ -390,61 +241,34 @@ void btf_type_to_json(const std::map<btf_type_id, btf_kind> &id_to_kind,
       continue;
     }
 
-    switch (kind.index()) {
-    case BTF_KIND_PTR:
-      root_types.erase(std::get<BTF_KIND_PTR>(kind).type);
-      break;
-    case BTF_KIND_ARRAY:
-      root_types.erase(std::get<BTF_KIND_ARRAY>(kind).element_type);
-      root_types.erase(std::get<BTF_KIND_ARRAY>(kind).index_type);
-      break;
-    case BTF_KIND_STRUCT:
-      for (auto &member : std::get<BTF_KIND_STRUCT>(kind).members) {
-        root_types.erase(member.type);
-      }
-      break;
-    case BTF_KIND_UNION:
-      for (auto &member : std::get<BTF_KIND_UNION>(kind).members) {
-        root_types.erase(member.type);
-      }
-      break;
-    case BTF_KIND_TYPEDEF:
-      root_types.erase(std::get<BTF_KIND_TYPEDEF>(kind).type);
-      break;
-    case BTF_KIND_VOLATILE:
-      root_types.erase(std::get<BTF_KIND_VOLATILE>(kind).type);
-      break;
-    case BTF_KIND_CONST:
-      root_types.erase(std::get<BTF_KIND_CONST>(kind).type);
-      break;
-    case BTF_KIND_RESTRICT:
-      root_types.erase(std::get<BTF_KIND_RESTRICT>(kind).type);
-      break;
-    case BTF_KIND_FUNCTION_PROTOTYPE:
-      for (auto &param :
-           std::get<BTF_KIND_FUNCTION_PROTOTYPE>(kind).parameters) {
-        root_types.erase(param.type);
-      }
-      root_types.erase(std::get<BTF_KIND_FUNCTION_PROTOTYPE>(kind).return_type);
-      break;
-    case BTF_KIND_FUNCTION:
-      root_types.erase(std::get<BTF_KIND_FUNCTION>(kind).type);
-      break;
-    case BTF_KIND_VAR:
-      root_types.erase(std::get<BTF_KIND_VAR>(kind).type);
-      break;
-    case BTF_KIND_DATA_SECTION:
-      for (auto &variable : std::get<BTF_KIND_DATA_SECTION>(kind).members) {
-        root_types.erase(variable.type);
-      }
-      break;
-    case BTF_KIND_DECL_TAG:
-      root_types.erase(std::get<BTF_KIND_DECL_TAG>(kind).type);
-      break;
-    case BTF_KIND_TYPE_TAG:
-      root_types.erase(std::get<BTF_KIND_TYPE_TAG>(kind).type);
-      break;
-    }
+    std::visit(
+        [&](const auto &kind) {
+          if constexpr (btf_kind_traits<decltype(kind)>::has_type) {
+            root_types.erase(kind.type);
+          }
+          if constexpr (btf_kind_traits<decltype(kind)>::has_element_type) {
+            root_types.erase(kind.element_type);
+          }
+          if constexpr (btf_kind_traits<decltype(kind)>::has_index_type) {
+            root_types.erase(kind.index_type);
+          }
+          if constexpr (btf_kind_traits<decltype(kind)>::has_members) {
+            for (auto &member : kind.members) {
+              if constexpr (btf_kind_traits<decltype(member)>::has_type) {
+                root_types.erase(member.type);
+              }
+            }
+          }
+          if constexpr (btf_kind_traits<decltype(kind)>::has_parameters) {
+            for (auto &parameter : kind.parameters) {
+              root_types.erase(parameter.type);
+            }
+          }
+          if constexpr (btf_kind_traits<decltype(kind)>::has_return_type) {
+            root_types.erase(kind.return_type);
+          }
+        },
+        kind);
   }
   bool first = true;
   PRINT_JSON_OBJECT_START();
