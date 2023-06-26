@@ -32,6 +32,7 @@ int main(int argc, char **argv) {
     std::string output_file;
     std::string json_output_file;
     std::string root_type;
+    std::string c_output_file;
     bool pretty_print_json = false;
 
     options opts;
@@ -47,6 +48,9 @@ int main(int argc, char **argv) {
     opts.add(
         "-p", 1, [&](auto iter) { pretty_print_json = true; },
         "Pretty print JSON");
+    opts.add(
+        "-t", 2, [&](auto iter) { c_output_file = *iter; }, "C output file");
+
     opts.parse(argc, argv);
 
     if (input_file.empty()) {
@@ -55,7 +59,8 @@ int main(int argc, char **argv) {
       return 1;
     }
 
-    if (output_file.empty() && json_output_file.empty()) {
+    if (output_file.empty() && json_output_file.empty() &&
+        c_output_file.empty()) {
       std::cerr << "No output file" << std::endl;
       opts.print_help();
       return 1;
@@ -93,9 +98,13 @@ int main(int argc, char **argv) {
 
     std::optional<std::function<bool(libbtf::btf_type_id)>> filter =
         std::nullopt;
+    libbtf::btf_type_id root_type_id = 0;
     if (root_type.size() > 0) {
-      libbtf::btf_type_id root_type_id = 0;
-      root_type_id = btf_data.get_id(root_type);
+      root_type_id = std::strtoul(root_type.c_str(), nullptr, 10);
+      if (root_type_id == 0) {
+        root_type_id = btf_data.get_id(root_type);
+      }
+
       if (root_type_id == 0) {
         throw std::runtime_error("Failed to find root type: " + root_type);
       }
@@ -123,6 +132,20 @@ int main(int argc, char **argv) {
       } else {
         btf_data.to_json(out, filter);
       }
+    }
+
+    if (c_output_file.size() > 0) {
+      std::ofstream c_output;
+      if (c_output_file != "-") {
+        c_output.open(c_output_file);
+        if (!c_output) {
+          throw std::runtime_error("Failed to open C output file: " +
+                                   c_output_file);
+        }
+      }
+      std::ostream &out = c_output_file == "-" ? std::cout : c_output;
+
+      btf_data.to_c_header(out, filter);
     }
 
     return 0;

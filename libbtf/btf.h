@@ -206,6 +206,15 @@ template <typename T> struct btf_kind_traits {
   constexpr static bool has_linkage = requires(const T &value) {
     value.linkage;
   };
+  constexpr static bool has_count_of_elements = requires(const T &value) {
+    value.count_of_elements;
+  };
+  constexpr static bool has_element_type = requires(const T &value) {
+    value.element_type;
+  };
+  constexpr static bool has_index_type = requires(const T &value) {
+    value.index_type;
+  };
 };
 
 // Note: The order of the variant types must match the order in the enum above.

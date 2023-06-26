@@ -72,7 +72,7 @@ public:
   template <class T> T get_kind_type(btf_type_id id) const;
 
   btf_type_id dereference_pointer(btf_type_id id) const;
-  size_t get_size(btf_type_id id) const;
+  uint32_t get_size(btf_type_id id) const;
   void
   to_json(std::ostream &out,
           std::optional<std::function<bool(btf_type_id)>> = std::nullopt) const;
@@ -80,6 +80,18 @@ public:
   btf_type_id append(const btf_kind &kind);
   void replace(btf_type_id id, const btf_kind &kind);
   btf_type_id last_type_id() const { return id_to_kind.rbegin()->first; }
+
+  void visit_depth_first(std::optional<std::function<bool(btf_type_id)>> before,
+                         std::optional<std::function<void(btf_type_id)>> after,
+                         btf_type_id id) const;
+
+  void to_c_header(std::ostream &out,
+                   std::optional<std::function<bool(btf_type_id)>> filter =
+                       std::nullopt) const;
+
+  std::vector<btf_type_id>
+  dependency_order(std::optional<std::function<bool(btf_type_id)>> filter =
+                       std::nullopt) const;
 
 private:
   /**
@@ -90,9 +102,14 @@ private:
    */
   btf_kind get_kind(btf_type_id id) const;
 
-  void update_name_to_id(btf_type_id id, const btf_kind &kind);
+  void update_name_to_id(btf_type_id id);
   void validate_type_graph(btf_type_id id,
                            std::set<btf_type_id> &visited) const;
+
+  std::string get_type_name(btf_type_id id) const;
+  btf_type_id get_descendant_type_id(btf_type_id id) const;
+  std::string get_type_declaration(btf_type_id id, const std::string &name,
+                                   size_t indent) const;
   std::map<btf_type_id, btf_kind> id_to_kind;
   std::map<std::string, btf_type_id> name_to_id;
 };

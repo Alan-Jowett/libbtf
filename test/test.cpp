@@ -27,10 +27,14 @@
 #define TEST_OBJECT_FILE_DIRECTORY "external/ebpf-samples/build/"
 #define TEST_SOURCE_FILE_DIRECTORY "external/ebpf-samples/src/"
 #define TEST_JSON_FILE_DIRECTORY "external/ebpf-samples/json/"
+#define TEST_C_HEADER_FILE_DIRECTORY "test/expected/"
 #define BTF_CASE(file)                                                         \
   TEST_CASE("BTF JSON suite: " file, "[json]") { verify_BTF_json(file); }      \
   TEST_CASE("BTF LINE_INFO suite: " file, "[line_info]") {                     \
     verify_line_info(file);                                                    \
+  } \
+  TEST_CASE("BTF C header suite: " file, "[c_header]") {                       \
+    verify_c_header(file);                                                     \
   }
 
 void verify_line_by_line(std::istream &lhs, std::istream &rhs) {
@@ -176,6 +180,27 @@ void verify_line_info(const std::string &file) {
           REQUIRE(reader.sections[section] != nullptr);
         }
       });
+}
+
+void verify_c_header(const std::string &file)
+{
+  std::stringstream generated_output;
+  auto reader = ELFIO::elfio();
+  REQUIRE(reader.load(std::string(TEST_OBJECT_FILE_DIRECTORY) + file + ".o"));
+
+  auto btf = reader.sections[".BTF"];
+
+  libbtf::btf_type_data btf_data = std::vector<std::byte>(
+      {reinterpret_cast<const std::byte *>(btf->get_data()),
+       reinterpret_cast<const std::byte *>(btf->get_data() + btf->get_size())});
+
+  btf_data.to_c_header(generated_output);
+
+  // Read the expected output from the .h file.
+  std::ifstream expected_stream(std::string(TEST_C_HEADER_FILE_DIRECTORY) + file +
+                                std::string(".h"));
+
+  verify_line_by_line(expected_stream, generated_output);
 }
 
 BTF_CASE("byteswap")
