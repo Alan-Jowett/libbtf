@@ -206,25 +206,28 @@ std::vector<btf_type_id> btf_type_data::dependency_order(
 
   // Build list of dependencies.
   for (const auto &[id, kind] : id_to_kind) {
+    // Copy id to a local variable to workaround a bug in Apple's clang.
+    // See: https://github.com/llvm/llvm-project/issues/48582
+    auto local_id = id;
     bool match = false;
-    if (!filter || (*filter)(id)) {
+    if (!filter || (*filter)(local_id)) {
       match = true;
     }
     auto pre = [&](btf_type_id visit_id) -> bool {
       if (match) {
         filtered_types.insert(visit_id);
       }
-      if (visit_id != id) {
-        children[id].insert(visit_id);
-        parents[visit_id].insert(id);
+      if (visit_id != local_id) {
+        children[local_id].insert(visit_id);
+        parents[visit_id].insert(local_id);
       } else {
-        parents.insert({id, {}});
-        children.insert({id, {}});
+        parents.insert({local_id, {}});
+        children.insert({local_id, {}});
       }
       return true;
     };
 
-    visit_depth_first(pre, std::nullopt, id);
+    visit_depth_first(pre, std::nullopt, local_id);
   }
 
   while (!parents.empty()) {
