@@ -15,29 +15,6 @@
 
 namespace libbtf {
 
-#define TYPE_SUPPORTS(ClassName, Expr)                                         \
-  template <typename U> struct ClassName {                                     \
-  private:                                                                     \
-    template <typename> static constexpr std::false_type test(...);            \
-                                                                               \
-    template <typename T = U>                                                  \
-    static decltype((Expr), std::true_type{}) test(int);                       \
-                                                                               \
-  public:                                                                      \
-    static constexpr bool value = decltype(test<U>(0))::value;                 \
-  };
-
-TYPE_SUPPORTS(has_size_in_bytes, std::declval<T>().size_in_bytes)
-TYPE_SUPPORTS(has_count_of_elements, std::declval<T>().count_of_elements)
-TYPE_SUPPORTS(has_element_type, std::declval<T>().element_type)
-TYPE_SUPPORTS(has_index_type, std::declval<T>().index_type)
-TYPE_SUPPORTS(has_type, std::declval<T>().type)
-TYPE_SUPPORTS(has_name, std::declval<T>().name.empty())
-TYPE_SUPPORTS(has_optional_name, std::declval<T>().name.has_value())
-TYPE_SUPPORTS(has_members, std::declval<T>().members)
-TYPE_SUPPORTS(has_parameters, std::declval<T>().parameters)
-TYPE_SUPPORTS(has_return_type, std::declval<T>().return_type)
-
 btf_type_data::btf_type_data(const std::vector<std::byte> &btf_data) {
   auto visitor = [&, this](btf_type_id id,
                            const std::optional<std::string> &name,
@@ -81,9 +58,9 @@ uint32_t btf_type_data::get_size(btf_type_id id) const {
       [this, id](auto kind) -> uint32_t {
         if constexpr (std::is_same_v<decltype(kind), btf_kind_ptr>) {
           return sizeof(void *);
-        } else if constexpr (has_type<decltype(kind)>::value) {
+        } else if constexpr (btf_kind_traits<decltype(kind)>::has_type) {
           return get_size(kind.type);
-        } else if constexpr (has_size_in_bytes<decltype(kind)>::value) {
+        } else if constexpr (btf_kind_traits<decltype(kind)>::has_size_in_bytes) {
           return kind.size_in_bytes;
         } else if constexpr (std::is_same_v<decltype(kind), btf_kind_array>) {
           return kind.count_of_elements * get_size(kind.element_type);
@@ -163,28 +140,28 @@ void btf_type_data::visit_depth_first(
 
   std::visit(
       [&, this](auto kind) {
-        if constexpr (has_type<decltype(kind)>::value) {
+        if constexpr (btf_kind_traits<decltype(kind)>::has_type) {
           visit_depth_first(before, after, kind.type);
         }
-        if constexpr (has_index_type<decltype(kind)>::value) {
+        if constexpr (btf_kind_traits<decltype(kind)>::has_index_type) {
           visit_depth_first(before, after, kind.index_type);
         }
-        if constexpr (has_element_type<decltype(kind)>::value) {
+        if constexpr (btf_kind_traits<decltype(kind)>::has_element_type) {
           visit_depth_first(before, after, kind.element_type);
         }
-        if constexpr (has_members<decltype(kind)>::value) {
+        if constexpr (btf_kind_traits<decltype(kind)>::has_members) {
           for (auto member : kind.members) {
-            if constexpr (has_type<decltype(member)>::value) {
+            if constexpr (btf_kind_traits<decltype(member)>::has_type) {
               visit_depth_first(before, after, member.type);
             }
           }
         }
-        if constexpr (has_return_type<decltype(kind)>::value) {
+        if constexpr (btf_kind_traits<decltype(kind)>::has_return_type) {
           visit_depth_first(before, after, kind.return_type);
         }
-        if constexpr (has_parameters<decltype(kind)>::value) {
+        if constexpr (btf_kind_traits<decltype(kind)>::has_parameters) {
           for (auto param : kind.parameters) {
-            if constexpr (has_type<decltype(param)>::value) {
+            if constexpr (btf_kind_traits<decltype(param)>::has_type) {
               visit_depth_first(before, after, param.type);
             }
           }
@@ -301,10 +278,10 @@ std::string btf_type_data::get_type_name(btf_type_id id) const {
   auto kind = get_kind(id);
   return std::visit(
       [](auto kind) -> std::string {
-        if constexpr (has_name<decltype(kind)>::value) {
-          return kind.name;
-        } else if constexpr (has_optional_name<decltype(kind)>::value) {
+        if constexpr (btf_kind_traits<decltype(kind)>::has_optional_name) {
           return kind.name.value_or("");
+        } else if constexpr (btf_kind_traits<decltype(kind)>::has_name) {
+          return kind.name;
         } else {
           return "";
         }
@@ -317,7 +294,7 @@ btf_type_id btf_type_data::get_descendant_type_id(btf_type_id id) const {
   auto kind = get_kind(id);
   return std::visit(
       [id, this](auto kind) -> btf_type_id {
-        if constexpr (has_type<decltype(kind)>::value) {
+        if constexpr (btf_kind_traits<decltype(kind)>::has_type) {
           return this->get_descendant_type_id(kind.type);
         } else {
           return id;
@@ -405,7 +382,7 @@ std::string btf_type_data::get_type_declaration(btf_type_id id,
           if (!name.empty()) {
             result += " " + name;
           }
-        } else if constexpr (!has_type<decltype(kind)>::value) {
+        } else if constexpr (!btf_kind_traits<decltype(kind)>::has_type) {
           result += get_type_name(id) + " " + name;
         }
       },
