@@ -99,3 +99,12 @@ jobs:
         github-token: ${{ secrets.github_token }}
         flag-name: run-${{inputs.build_type}}-${{inputs.platform}}-${{inputs.arch}}
         parallel: true
+
+
+    - name: Set environment variable
+      run: |
+        echo "FOO=bar" >> $GITHUB_ENV
+
+    - name: Use environment variable
+      run: |
+        echo $FOO
