@@ -34,7 +34,6 @@ int main(int argc, char **argv) {
     std::string root_type;
     std::string c_output_file;
     bool pretty_print_json = false;
-    bool print_type_names = false;
 
     options opts;
     opts.add(

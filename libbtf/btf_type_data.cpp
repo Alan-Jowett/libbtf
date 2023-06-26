@@ -79,12 +79,12 @@ uint32_t btf_type_data::get_size(btf_type_id id) const {
   // Compute the effective size of a BTF type.
   return std::visit(
       [this, id](auto kind) -> uint32_t {
-        if constexpr (has_type<decltype(kind)>::value) {
+        if constexpr (std::is_same_v<decltype(kind), btf_kind_ptr>) {
+          return sizeof(void *);
+        } else if constexpr (has_type<decltype(kind)>::value) {
           return get_size(kind.type);
         } else if constexpr (has_size_in_bytes<decltype(kind)>::value) {
           return kind.size_in_bytes;
-        } else if constexpr (std::is_same_v<decltype(kind), btf_kind_ptr>) {
-          return sizeof(void *);
         } else if constexpr (std::is_same_v<decltype(kind), btf_kind_array>) {
           return kind.count_of_elements * get_size(kind.element_type);
         } else
