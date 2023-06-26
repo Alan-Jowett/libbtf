@@ -196,7 +196,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
 
   validate_range(btf, type_start, type_end);
 
-  btf_kind_null kind_null;
+  btf_kind_void kind_null;
   visitor(0, "void", {kind_null});
 
   for (offset = type_start; offset < type_end;) {

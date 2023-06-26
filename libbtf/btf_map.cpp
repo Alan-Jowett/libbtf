@@ -191,7 +191,7 @@ btf_type_id build_btf_map(btf_type_data &btf_data,
   return btf_data.append(btf_kind_var{
       .name = map_definition.name,
       .type = btf_data.append(map),
-      .linkage = btf_kind_var::BTF_LINKAGE_STATIC,
+      .linkage = BTF_LINKAGE_STATIC,
   });
 }
 

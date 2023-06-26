@@ -35,7 +35,7 @@ public:
    */
   btf_type_data() {
     // Add the void type.
-    id_to_kind[0] = btf_kind_null{};
+    id_to_kind[0] = btf_kind_void{};
   }
 
   /**
@@ -114,7 +114,7 @@ private:
   std::map<std::string, btf_type_id> name_to_id;
 };
 
-LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_NULL, btf_kind_null)
+LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_VOID, btf_kind_void)
 LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_INT, btf_kind_int)
 LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_PTR, btf_kind_ptr)
 LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(BTF_KIND_ARRAY, btf_kind_array)

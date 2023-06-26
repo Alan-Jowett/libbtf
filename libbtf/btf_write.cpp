@@ -63,7 +63,7 @@ std::vector<std::byte> btf_write_types(const std::vector<btf_kind> &btf_kind) {
   };
 
   for (const auto &kind : btf_kind) {
-    if (kind.index() == BTF_KIND_NULL) {
+    if (kind.index() == BTF_KIND_VOID) {
       continue;
     }
     // Write common BTF type header.
