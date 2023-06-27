@@ -1,3 +1,7 @@
+// Generated from packet_overflow.o
+
+#pragma once
+
 typedef unsigned int __u32;
 
 struct xdp_md {

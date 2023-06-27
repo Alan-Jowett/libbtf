@@ -218,6 +218,12 @@ void verify_c_header(const std::string &file) {
   std::ifstream expected_stream(std::string(TEST_C_HEADER_FILE_DIRECTORY) +
                                 file + std::string(".h"));
 
+  // Skip over the first two line of the header file, which is a comment
+  // containing the name of ELF file and the name of the header file.
+  std::string line;
+  std::getline(expected_stream, line);
+  std::getline(expected_stream, line);
+
   verify_line_by_line(expected_stream, generated_output);
 }
 

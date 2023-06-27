@@ -1,3 +1,7 @@
+// Generated from twotypes.o
+
+#pragma once
+
 struct ctx;
 
 struct {

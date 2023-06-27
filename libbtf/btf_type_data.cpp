@@ -60,7 +60,8 @@ uint32_t btf_type_data::get_size(btf_type_id id) const {
           return sizeof(void *);
         } else if constexpr (btf_kind_traits<decltype(kind)>::has_type) {
           return get_size(kind.type);
-        } else if constexpr (btf_kind_traits<decltype(kind)>::has_size_in_bytes) {
+        } else if constexpr (btf_kind_traits<decltype(
+                                 kind)>::has_size_in_bytes) {
           return kind.size_in_bytes;
         } else if constexpr (std::is_same_v<decltype(kind), btf_kind_array>) {
           return kind.count_of_elements * get_size(kind.element_type);
@@ -245,6 +246,8 @@ void btf_type_data::to_c_header(
   std::set<btf_type_id> declared_types;
 
   size_t indent = 0;
+  out << "#pragma once\n\n";
+
   // Print each type in dependency order.
   for (auto id : dependency_order(filter)) {
     if (get_type_name(id).empty()) {

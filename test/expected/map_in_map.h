@@ -1,3 +1,7 @@
+// Generated from map_in_map.o
+
+#pragma once
+
 typedef unsigned int __uint32_t;
 
 typedef __uint32_t uint32_t;

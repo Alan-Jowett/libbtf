@@ -1,3 +1,7 @@
+// Generated from loop.o
+
+#pragma once
+
 typedef unsigned char uint8_t;
 
 struct test_md {

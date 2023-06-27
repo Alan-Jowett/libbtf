@@ -1,3 +1,7 @@
+// Generated from exposeptr2.o
+
+#pragma once
+
 typedef unsigned int __uint32_t;
 
 typedef unsigned long long __uint64_t;
