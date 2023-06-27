@@ -99,3 +99,35 @@ jobs:
         github-token: ${{ secrets.github_token }}
         flag-name: run-${{inputs.build_type}}-${{inputs.platform}}-${{inputs.arch}}
         parallel: true
+
+    - name: Run test
+      if: inputs.platform != 'windows-2019' && inputs.platform != 'windows-2022'
+      id: run_test
+      shell: pwsh
+      run:
+        $command = ${{env.TEST_COMMAND}}
+        $command_prolog = ""
+        $command_epilog = ""
+        if ("${{inputs.vs_dev}}" -eq "true") {
+          . "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\Tools\Launch-VsDevShell.ps1
+        }
+        if ("${{inputs.code_coverage}}" -eq "true") {
+          $command_prolog = "OpenCppCoverage.exe -q --cover_children --sources %CD% --excluded_sources %CD%\external\Catch2 --export_type cobertura:ebpf_for_windows.xml --working_dir ${{env.BUILD_PLATFORM}}\${{env.BUILD_CONFIGURATION}} -- "
+        }
+        if ("${{inputs.fault_injection}}" -eq "true") {
+          $env:EBPF_FAULT_INJECTION_ENABLED = "yes"
+          if ("${{inputs.code_coverage}}" -eq "true") {
+            $command_epilog = "16"
+          } else {
+            $command_epilog = "4"
+          }
+          $command_prolog = .\Test-FaultInjection.ps1 ${{env.DUMP_PATH}} ${{env.TEST_TIMEOUT}}
+        } else
+          $command_prolog = .\Test-Run.ps1 ${{env.DUMP_PATH}} ${{env.TEST_TIMEOUT}}
+        }
+        if ("${{inputs.environment}}" -eq "ebpf_cicd_tests") {
+          $command_prolog = ""
+          $command_epilog = ""
+        }
+        $command = $command_prolog + $command + $command_epilog
+        & $command
