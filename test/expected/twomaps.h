@@ -1,3 +1,7 @@
+// Generated from twomaps.o
+
+#pragma once
+
 typedef unsigned long long __uint64_t;
 
 typedef __uint64_t uint64_t;

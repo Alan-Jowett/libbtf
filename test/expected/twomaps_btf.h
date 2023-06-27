@@ -1,3 +1,7 @@
+// Generated from twomaps_btf.o
+
+#pragma once
+
 typedef long unsigned int uint64_t;
 
 struct ctx;

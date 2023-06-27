@@ -1,3 +1,7 @@
+// Generated from packet_reallocate.o
+
+#pragma once
+
 struct bpf_sock;
 
 struct bpf_flow_keys;

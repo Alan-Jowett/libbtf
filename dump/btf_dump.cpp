@@ -142,7 +142,9 @@ int main(int argc, char **argv) {
           throw std::runtime_error("Failed to open C output file: " +
                                    c_output_file);
         }
+        c_output << "// Generated from " << input_file << "\n\n";
       }
+
       std::ostream &out = c_output_file == "-" ? std::cout : c_output;
 
       btf_data.to_c_header(out, filter);

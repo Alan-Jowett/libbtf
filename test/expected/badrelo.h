@@ -1,3 +1,7 @@
+// Generated from badrelo.o
+
+#pragma once
+
 typedef unsigned long long __uint64_t;
 
 struct bpf_map;

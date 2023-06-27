@@ -1,3 +1,7 @@
+// Generated from tail_call.o
+
+#pragma once
+
 typedef unsigned int __uint32_t;
 
 typedef unsigned int __u32;
