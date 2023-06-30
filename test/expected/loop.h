@@ -9,3 +9,5 @@ struct test_md {
   uint8_t *data_end;
 };
 
+int foo(test_md* ctx);
+

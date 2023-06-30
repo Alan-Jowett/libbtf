@@ -49,3 +49,5 @@ struct __sk_buff {
   __u32 gso_size;
 };
 
+int reallocate_invalidates(__sk_buff* ctx);
+

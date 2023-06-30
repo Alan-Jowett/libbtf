@@ -13,3 +13,5 @@ struct xdp_md {
   __u32 egress_ifindex;
 };
 
+int test_packet_access(xdp_md* ctx);
+

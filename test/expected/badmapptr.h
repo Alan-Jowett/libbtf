@@ -13,3 +13,5 @@ struct {
   int (*max_entries)[1];
 } test_map;
 
+int test_repro(void* ctx);
+

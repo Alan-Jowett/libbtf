@@ -25,3 +25,5 @@ struct {
   } * values[0];
 } array_of_maps;
 
+int func(void* ctx);
+

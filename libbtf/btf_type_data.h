@@ -107,6 +107,7 @@ private:
                            std::set<btf_type_id> &visited) const;
 
   std::string get_type_name(btf_type_id id) const;
+  std::string get_qualified_type_name(btf_type_id id) const;
   btf_type_id get_descendant_type_id(btf_type_id id) const;
   std::string get_type_declaration(btf_type_id id, const std::string &name,
                                    size_t indent) const;

@@ -7,3 +7,5 @@ struct {
   int (*max_entries)[262144];
 } ring_buffer;
 
+int test(void* ctx);
+

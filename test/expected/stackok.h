@@ -2,3 +2,5 @@
 
 #pragma once
 
+int func(void* ctx);
+
