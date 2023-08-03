@@ -13,3 +13,5 @@ struct xdp_md {
   __u32 egress_ifindex;
 };
 
+int read_write_packet_start(xdp_md* ctx);
+

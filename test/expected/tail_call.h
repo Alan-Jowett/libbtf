@@ -24,3 +24,7 @@ struct {
   int (*max_entries)[1];
 } map;
 
+int callee(xdp_md* ctx);
+
+int caller(xdp_md* ctx);
+

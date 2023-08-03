@@ -20,3 +20,5 @@ struct {
   int (*max_entries)[1];
 } map1;
 
+int func(ctx* ctx);
+

@@ -4,3 +4,5 @@
 
 struct ctx;
 
+int func(ctx* ctx);
+

@@ -270,6 +270,15 @@ void btf_type_data::to_c_header(
           } else if constexpr (std::is_same_v<decltype(kind), btf_kind_var>) {
             out << get_type_declaration(kind.type, kind.name, indent)
                 << ";\n\n";
+          } else if constexpr (std::is_same_v<decltype(kind),
+                                              btf_kind_function>) {
+            if (kind.linkage == BTF_LINKAGE_STATIC) {
+              out << "static ";
+            } else if (kind.linkage == BTF_LINKAGE_EXTERN) {
+              out << "extern ";
+            }
+            out << get_type_declaration(kind.type, kind.name, indent)
+                << ";\n\n";
           }
         },
         get_kind(id));
@@ -285,6 +294,43 @@ std::string btf_type_data::get_type_name(btf_type_id id) const {
           return kind.name.value_or("");
         } else if constexpr (btf_kind_traits<decltype(kind)>::has_name) {
           return kind.name;
+        } else {
+          return "";
+        }
+      },
+      get_kind(id));
+}
+
+std::string btf_type_data::get_qualified_type_name(btf_type_id id) const {
+  // Use visit to return the name if the type has it.
+  auto kind = get_kind(id);
+  return std::visit(
+      [this](auto kind) -> std::string {
+        // Add possible qualifiers.
+        std::string qualifier;
+        if constexpr (std::is_same_v<decltype(kind), btf_kind_const>) {
+          qualifier = "const ";
+        } else if constexpr (std::is_same_v<decltype(kind),
+                                            btf_kind_volatile>) {
+          qualifier = "volatile ";
+        } else if constexpr (std::is_same_v<decltype(kind),
+                                            btf_kind_restrict>) {
+          qualifier = "restrict ";
+        }
+
+        std::string suffix;
+        if constexpr (std::is_same_v<decltype(kind), btf_kind_ptr>) {
+          suffix = "*";
+        }
+
+        if constexpr (btf_kind_traits<decltype(kind)>::has_optional_name) {
+          return qualifier + kind.name.value_or("") + suffix;
+        } else if constexpr (btf_kind_traits<decltype(kind)>::has_name) {
+          return kind.name + suffix;
+        } else if constexpr (btf_kind_traits<decltype(kind)>::has_type) {
+          return qualifier + this->get_qualified_type_name(kind.type) + suffix;
+        } else if constexpr (std::is_same_v<decltype(kind), btf_kind_void>) {
+          return qualifier + "void" + suffix;
         } else {
           return "";
         }
@@ -385,6 +431,22 @@ std::string btf_type_data::get_type_declaration(btf_type_id id,
           if (!name.empty()) {
             result += " " + name;
           }
+        } else if constexpr (std::is_same_v<decltype(kind),
+                                            btf_kind_function_prototype>) {
+          result +=
+              get_qualified_type_name(kind.return_type) + " " + name + "(";
+          for (auto param : kind.parameters) {
+            result += get_qualified_type_name(param.type);
+            if (!param.name.empty()) {
+              result += " " + param.name;
+            }
+            result += ", ";
+          }
+          if (kind.parameters.size() > 0) {
+            result.pop_back();
+            result.pop_back();
+          }
+          result += ")";
         } else if constexpr (!btf_kind_traits<decltype(kind)>::has_type) {
           result += get_type_name(id) + " " + name;
         }

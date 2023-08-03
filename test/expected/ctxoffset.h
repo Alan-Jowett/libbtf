@@ -13,3 +13,5 @@ struct {
   uint32_t *value;
 } map;
 
+int func(void* ctx);
+

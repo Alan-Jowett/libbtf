@@ -17,3 +17,7 @@ struct {
   int (*max_entries)[1];
 } map;
 
+extern int ebpf_map_update_elem(bpf_map*, const void*, const void*, uint64_t);
+
+int func(ctx* ctx);
+
