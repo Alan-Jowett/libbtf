@@ -25,6 +25,56 @@ static uint32_t _value_from_BTF__uint(const btf_type_data &btf_types,
   return btf_types.get_kind_type<btf_kind_array>(type_id).count_of_elements;
 }
 
+/**
+ * @brief Check if the given type is a map. This is done by checking if the type
+ * is a struct with the following members:
+ * - type
+ * - max_entries
+ * - key or key_size
+ * - value or value_size or values
+ *
+ * @param btf_types The BTF types object.
+ * @param map_type_id The type id of the type to check.
+ * @return true This is a map type.
+ * @return false This is not a map type.
+ */
+static bool _is_map_type(const btf_type_data &btf_types,
+                         btf_type_id map_type_id) {
+  if (btf_types.get_kind_index(map_type_id) != BTF_KIND_STRUCT) {
+    return false;
+  }
+
+  auto map_struct = btf_types.get_kind_type<btf_kind_struct>(map_type_id);
+  bool has_type = false;
+  bool has_max_entries = false;
+  bool has_key = false;
+  bool has_key_size = false;
+  bool has_value = false;
+  bool has_value_size = false;
+  bool has_values = false;
+
+  for (const auto &member : map_struct.members) {
+    if (member.name == "type") {
+      has_type = true;
+    } else if (member.name == "max_entries") {
+      has_max_entries = true;
+    } else if (member.name == "key") {
+      has_key = true;
+    } else if (member.name == "key_size") {
+      has_key_size = true;
+    } else if (member.name == "value") {
+      has_value = true;
+    } else if (member.name == "value_size") {
+      has_value_size = true;
+    } else if (member.name == "values") {
+      has_values = true;
+    }
+  }
+
+  return has_type && has_max_entries && (has_key || has_key_size) &&
+         (has_value || has_value_size || has_values);
+}
+
 static btf_map_definition
 _get_map_definition_from_btf(const btf_type_data &btf_types,
                              btf_type_id map_type_id) {
@@ -95,9 +145,20 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
     auto values_array = btf_types.get_kind_type<btf_kind_array>(values);
     auto ptr = btf_types.get_kind_type<btf_kind_ptr>(values_array.element_type);
 
-    // Verify this is a pointer to a BTF map definition.
-    auto map_def = btf_types.get_kind_type<btf_kind_struct>(ptr.type);
-    map_definition.inner_map_type_id = static_cast<int>(ptr.type);
+    if (_is_map_type(btf_types, ptr.type)) {
+      // Value is a map.
+      // Store the inner map type ID and set value size to 4 bytes (the size of
+      // a map id).
+      map_definition.inner_map_type_id = static_cast<int>(ptr.type);
+      map_definition.value_size = sizeof(uint32_t);
+    } else if (btf_types.get_kind_index(ptr.type) ==
+               BTF_KIND_FUNCTION_PROTOTYPE) {
+      // Value is a BPF program.
+      // Set the value size to 4 bytes (the size of a program id).
+      map_definition.value_size = sizeof(uint32_t);
+    } else {
+      throw std::runtime_error("invalid type for values");
+    }
   }
 
   return map_definition;
