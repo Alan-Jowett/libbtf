@@ -43,8 +43,10 @@ std::map<std::string, std::string> string_replacements = {
 #define TEST_SOURCE_FILE_DIRECTORY "external/ebpf-samples/src/"
 #define TEST_JSON_FILE_DIRECTORY "external/ebpf-samples/json/"
 #define TEST_C_HEADER_FILE_DIRECTORY "test/expected/"
-#define BTF_CASE(file)                                                         \
-  TEST_CASE("BTF JSON suite: " file, "[json]") { verify_BTF_json(file); }      \
+#define BTF_CASE(file, apply_replacements)                                     \
+  TEST_CASE("BTF JSON suite: " file, "[json]") {                               \
+    verify_BTF_json(file, apply_replacements);                                 \
+  }                                                                            \
   TEST_CASE("BTF LINE_INFO suite: " file, "[line_info]") {                     \
     verify_line_info(file);                                                    \
   }                                                                            \
@@ -52,15 +54,18 @@ std::map<std::string, std::string> string_replacements = {
     verify_c_header(file);                                                     \
   }
 
-void verify_line_by_line(std::istream &lhs, std::istream &rhs) {
+void verify_line_by_line(std::istream &lhs, std::istream &rhs,
+                         bool apply_replacements = false) {
   std::string lhs_line;
   std::string rhs_line;
   while (std::getline(lhs, lhs_line)) {
     bool has_more = (bool)std::getline(rhs, rhs_line);
     REQUIRE(has_more);
-    for (const auto &[old_string, new_string] : string_replacements) {
-      lhs_line =
-          std::regex_replace(lhs_line, std::regex(old_string), new_string);
+    if (apply_replacements) {
+      for (const auto &[old_string, new_string] : string_replacements) {
+        lhs_line =
+            std::regex_replace(lhs_line, std::regex(old_string), new_string);
+      }
     }
     REQUIRE(lhs_line == rhs_line);
   }
@@ -68,7 +73,7 @@ void verify_line_by_line(std::istream &lhs, std::istream &rhs) {
   REQUIRE_FALSE(has_more);
 }
 
-void verify_BTF_json(const std::string &file) {
+void verify_BTF_json(const std::string &file, bool apply_replacements = true) {
   std::stringstream generated_output;
   auto reader = ELFIO::elfio();
   REQUIRE(reader.load(std::string(TEST_OBJECT_FILE_DIRECTORY) + file + ".o"));
@@ -126,7 +131,7 @@ void verify_BTF_json(const std::string &file) {
                                 std::string(".json"));
   std::stringstream generated_stream(pretty_printed_json);
 
-  verify_line_by_line(expected_stream, generated_stream);
+  verify_line_by_line(expected_stream, generated_stream, apply_replacements);
 
   // Verify that encoding the BTF data and parsing it again results in the same
   // JSON.
@@ -227,25 +232,25 @@ void verify_c_header(const std::string &file) {
   verify_line_by_line(expected_stream, generated_output);
 }
 
-BTF_CASE("byteswap")
-BTF_CASE("ctxoffset")
-BTF_CASE("exposeptr")
-BTF_CASE("exposeptr2")
-BTF_CASE("map_in_map")
-BTF_CASE("mapoverflow")
-BTF_CASE("mapunderflow")
-BTF_CASE("mapvalue-overrun")
-BTF_CASE("nullmapref")
-BTF_CASE("packet_access")
-BTF_CASE("packet_overflow")
-BTF_CASE("packet_reallocate")
-BTF_CASE("packet_start_ok")
-BTF_CASE("stackok")
-BTF_CASE("tail_call")
-BTF_CASE("tail_call_bad")
-BTF_CASE("twomaps")
-BTF_CASE("twostackvars")
-BTF_CASE("twotypes")
+BTF_CASE("byteswap", true)
+BTF_CASE("ctxoffset", true)
+BTF_CASE("exposeptr", true)
+BTF_CASE("exposeptr2", true)
+BTF_CASE("map_in_map", false)
+BTF_CASE("mapoverflow", true)
+BTF_CASE("mapunderflow", true)
+BTF_CASE("mapvalue-overrun", true)
+BTF_CASE("nullmapref", true)
+BTF_CASE("packet_access", true)
+BTF_CASE("packet_overflow", true)
+BTF_CASE("packet_reallocate", true)
+BTF_CASE("packet_start_ok", true)
+BTF_CASE("stackok", true)
+BTF_CASE("tail_call", true)
+BTF_CASE("tail_call_bad", true)
+BTF_CASE("twomaps", true)
+BTF_CASE("twostackvars", true)
+BTF_CASE("twotypes", true)
 
 TEST_CASE("validate-parsing-simple-loop", "[validation]") {
   libbtf::btf_type_data btf_data_loop;
@@ -572,7 +577,7 @@ TEST_CASE("decl_tag", "[parsing][json]") {
   verify_line_by_line(generated_json_stream, expected_json_stream);
 }
 
-TEST_CASE("btf_maps", "[parsing][json]") {
+TEST_CASE("btf_maps_map_in_map", "[parsing][json]") {
   auto reader = ELFIO::elfio();
   std::string file = "map_in_map";
   REQUIRE(reader.load(std::string(TEST_OBJECT_FILE_DIRECTORY) + file + ".o"));
@@ -587,19 +592,42 @@ TEST_CASE("btf_maps", "[parsing][json]") {
   REQUIRE(map_definitions.size() == 2);
 
   // Verify that each map was parsed correctly.
-  REQUIRE(map_definitions[0].name == "array_of_maps");
-  REQUIRE(map_definitions[0].map_type == 12); // BPF_MAP_TYPE_ARRAY_OF_MAPS
-  REQUIRE(map_definitions[0].key_size == 4);
-  REQUIRE(map_definitions[0].value_size == 0);
-  REQUIRE(map_definitions[0].max_entries == 1);
-  REQUIRE(map_definitions[0].inner_map_type_id != 0);
-
-  REQUIRE(map_definitions[1].name == "inner_map");
-  REQUIRE(map_definitions[1].map_type == 2); // BPF_MAP_TYPE_ARRAY
+  REQUIRE(map_definitions[1].name == "array_of_maps");
+  REQUIRE(map_definitions[1].map_type == 12); // BPF_MAP_TYPE_ARRAY_OF_MAPS
   REQUIRE(map_definitions[1].key_size == 4);
   REQUIRE(map_definitions[1].value_size == 4);
   REQUIRE(map_definitions[1].max_entries == 1);
-  REQUIRE(map_definitions[1].inner_map_type_id == 0);
+  REQUIRE(map_definitions[1].inner_map_type_id != 0);
+
+  REQUIRE(map_definitions[0].name == "inner_map");
+  REQUIRE(map_definitions[0].map_type == 2); // BPF_MAP_TYPE_ARRAY
+  REQUIRE(map_definitions[0].key_size == 4);
+  REQUIRE(map_definitions[0].value_size == 4);
+  REQUIRE(map_definitions[0].max_entries == 1);
+  REQUIRE(map_definitions[0].inner_map_type_id == 0);
+}
+
+TEST_CASE("btf_maps_prog_array", "[parsing][json]") {
+  auto reader = ELFIO::elfio();
+  std::string file = "prog_array";
+  REQUIRE(reader.load(std::string(TEST_OBJECT_FILE_DIRECTORY) + file + ".o"));
+
+  auto btf = reader.sections[".BTF"];
+
+  libbtf::btf_type_data btf_data = std::vector<std::byte>(
+      {reinterpret_cast<const std::byte *>(btf->get_data()),
+       reinterpret_cast<const std::byte *>(btf->get_data() + btf->get_size())});
+
+  auto map_definitions = libbtf::parse_btf_map_section(btf_data);
+  REQUIRE(map_definitions.size() == 1);
+
+  // Verify that each map was parsed correctly.
+  REQUIRE(map_definitions[0].name == "prog_array_map");
+  REQUIRE(map_definitions[0].map_type == 3); // BPF_MAP_TYPE_PROG_ARRAY
+  REQUIRE(map_definitions[0].key_size == 4);
+  REQUIRE(map_definitions[0].value_size == 4);
+  REQUIRE(map_definitions[0].max_entries == 4);
+  REQUIRE(map_definitions[0].inner_map_type_id == 0);
 }
 
 TEST_CASE("get_unknown_type_id", "[btf_type_data][negative]") {
@@ -625,7 +653,7 @@ TEST_CASE("build_btf_map_section", "[btf_type_data]") {
                                  .type_id = 1,
                                  .map_type = 12, // BPF_MAP_TYPE_ARRAY_OF_MAPS
                                  .key_size = 4,
-                                 .value_size = 0,
+                                 .value_size = 4,
                                  .max_entries = 1,
                                  .inner_map_type_id = 2});
 
