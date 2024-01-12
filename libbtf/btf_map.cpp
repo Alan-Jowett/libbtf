@@ -9,6 +9,7 @@
 #include "btf_type_data.h"
 #include "btf_write.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace libbtf {
@@ -174,34 +175,51 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
 
 std::vector<btf_map_definition>
 parse_btf_map_section(const btf_type_data &btf_data) {
-  std::vector<btf_map_definition> map_definitions;
-  // Keep track of map type IDs to detect maps without a top-level definition.
-  std::set<btf_type_id> map_type_ids;
+  std::map<btf_type_id, btf_map_definition> map_definitions;
+  std::set<btf_type_id> inner_map_type_ids;
+  // Get the .maps data section.
   auto maps_section =
       btf_data.get_kind_type<btf_kind_data_section>(btf_data.get_id(".maps"));
 
+  // Helper function to add a map definition to the map definitions and add the
+  // inner map type ID to the list of inner map type IDs if it is present.
+  auto handle_map_type_id = [&](const std::string &name,
+                                btf_type_id map_type_id) {
+    auto map_definition =
+        _get_map_definition_from_btf(btf_data, name, map_type_id);
+    map_definitions[map_definition.type_id] = map_definition;
+    // Add the inner map type ID to the list of inner map type IDs if it is
+    // present.
+    if (map_definition.inner_map_type_id != 0) {
+      inner_map_type_ids.insert(map_definition.inner_map_type_id);
+    }
+  };
+
+  // Add all maps in the .maps data section.
   for (const auto &var : maps_section.members) {
     auto map_var = btf_data.get_kind_type<btf_kind_var>(var.type);
-    map_definitions.push_back(
-        _get_map_definition_from_btf(btf_data, map_var.name, map_var.type));
-    map_type_ids.insert(map_var.type);
+    handle_map_type_id(map_var.name, map_var.type);
   }
 
-  // Check for maps without a top-level definition.
-  for (const auto &map : map_definitions) {
-    if (map.inner_map_type_id != 0) {
-      if (map_type_ids.find(map.inner_map_type_id) != map_type_ids.end()) {
+  // Recursively add all inner maps. Assume that there are at most two levels of
+  // inner maps. This is the current limit imposed by the BPF verifier on Linux.
+  for (size_t inner_map_recursion_level = 0; inner_map_recursion_level < 2;
+       inner_map_recursion_level++) {
+    // Add all maps that are not in the .maps data section.
+    for (const auto &map_type_id : inner_map_type_ids) {
+      // Skip if the map is already present.
+      if (map_definitions.find(map_type_id) != map_definitions.end()) {
         continue;
       }
-
-      // Add a top-level definition for the inner map.
-      map_definitions.push_back(
-          _get_map_definition_from_btf(btf_data, "", map.inner_map_type_id));
-      map_type_ids.insert(map.inner_map_type_id);
+      handle_map_type_id("", map_type_id);
     }
   }
 
-  return map_definitions;
+  std::vector<btf_map_definition> map_definitions_vector;
+  for (const auto &map_definition : map_definitions) {
+    map_definitions_vector.push_back(map_definition.second);
+  }
+  return map_definitions_vector;
 }
 
 btf_type_id btf_uint_from_value(btf_type_data &btf_data, uint32_t value) {

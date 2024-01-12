@@ -623,19 +623,19 @@ TEST_CASE("btf_maps_map_in_map_anonymous", "[parsing][json]") {
   REQUIRE(map_definitions.size() == 2);
 
   // Verify that each map was parsed correctly.
-  REQUIRE(map_definitions[0].name == "outer_map");
-  REQUIRE(map_definitions[0].map_type == 12); // BPF_MAP_TYPE_ARRAY_OF_MAPS
-  REQUIRE(map_definitions[0].key_size == 4);
-  REQUIRE(map_definitions[0].value_size == 4);
-  REQUIRE(map_definitions[0].max_entries == 1);
-  REQUIRE(map_definitions[0].inner_map_type_id != 0);
-
-  REQUIRE(map_definitions[1].name == "");
-  REQUIRE(map_definitions[1].map_type == 2); // BPF_MAP_TYPE_ARRAY
+  REQUIRE(map_definitions[1].name == "outer_map");
+  REQUIRE(map_definitions[1].map_type == 12); // BPF_MAP_TYPE_ARRAY_OF_MAPS
   REQUIRE(map_definitions[1].key_size == 4);
   REQUIRE(map_definitions[1].value_size == 4);
   REQUIRE(map_definitions[1].max_entries == 1);
-  REQUIRE(map_definitions[1].inner_map_type_id == 0);
+  REQUIRE(map_definitions[1].inner_map_type_id != 0);
+
+  REQUIRE(map_definitions[0].name == "");
+  REQUIRE(map_definitions[0].map_type == 2); // BPF_MAP_TYPE_ARRAY
+  REQUIRE(map_definitions[0].key_size == 4);
+  REQUIRE(map_definitions[0].value_size == 4);
+  REQUIRE(map_definitions[0].max_entries == 1);
+  REQUIRE(map_definitions[0].inner_map_type_id == 0);
 }
 
 TEST_CASE("btf_maps_prog_array", "[parsing][json]") {
