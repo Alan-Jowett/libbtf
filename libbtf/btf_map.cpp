@@ -26,6 +26,14 @@ static uint32_t _value_from_BTF__uint(const btf_type_data &btf_types,
   return btf_types.get_kind_type<btf_kind_array>(type_id).count_of_elements;
 }
 
+static btf_type_id _unwrap_typedef(const btf_type_data &btf_types,
+                                   btf_type_id type_id) {
+  if (btf_types.get_kind_index(type_id) != BTF_KIND_TYPEDEF) {
+    return type_id;
+  }
+  return btf_types.get_kind_type<btf_kind_typedef>(type_id).type;
+}
+
 /**
  * @brief Check if the given type is a map. This is done by checking if the type
  * is a struct with the following members:
@@ -96,6 +104,8 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
   btf_type_id value_size = 0;
   btf_type_id values = 0;
 
+  map_type_id = _unwrap_typedef(btf_types, map_type_id);
+
   auto map_struct = btf_types.get_kind_type<btf_kind_struct>(map_type_id);
 
   for (const auto &member : map_struct.members) {
@@ -154,13 +164,15 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
     auto values_array = btf_types.get_kind_type<btf_kind_array>(values);
     auto ptr = btf_types.get_kind_type<btf_kind_ptr>(values_array.element_type);
 
-    if (_is_map_type(btf_types, ptr.type)) {
+    auto inner_map_type_id = _unwrap_typedef(btf_types, ptr.type);
+
+    if (_is_map_type(btf_types, inner_map_type_id)) {
       // Value is a map.
       // Store the inner map type ID and set value size to 4 bytes (the size of
       // a map id).
-      map_definition.inner_map_type_id = static_cast<int>(ptr.type);
+      map_definition.inner_map_type_id = static_cast<int>(inner_map_type_id);
       map_definition.value_size = sizeof(uint32_t);
-    } else if (btf_types.get_kind_index(ptr.type) ==
+    } else if (btf_types.get_kind_index(inner_map_type_id) ==
                BTF_KIND_FUNCTION_PROTOTYPE) {
       // Value is a BPF program.
       // Set the value size to 4 bytes (the size of a program id).
@@ -175,7 +187,7 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
 
 std::vector<btf_map_definition>
 parse_btf_map_section(const btf_type_data &btf_data) {
-  std::map<btf_type_id, btf_map_definition> map_definitions;
+  std::multimap<btf_type_id, btf_map_definition> map_definitions;
   std::set<btf_type_id> inner_map_type_ids;
   // Get the .maps data section.
   auto maps_section =
@@ -187,7 +199,7 @@ parse_btf_map_section(const btf_type_data &btf_data) {
                                 btf_type_id map_type_id) {
     auto map_definition =
         _get_map_definition_from_btf(btf_data, name, map_type_id);
-    map_definitions[map_definition.type_id] = map_definition;
+    map_definitions.insert({map_definition.type_id, map_definition});
     // Add the inner map type ID to the list of inner map type IDs if it is
     // present.
     if (map_definition.inner_map_type_id != 0) {
