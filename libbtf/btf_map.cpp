@@ -9,6 +9,7 @@
 #include "btf_type_data.h"
 #include "btf_write.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace libbtf {
@@ -75,9 +76,18 @@ static bool _is_map_type(const btf_type_data &btf_types,
          (has_value || has_value_size || has_values);
 }
 
+/**
+ * @brief Accept a BTF type ID for a map and return a BTF map definition.
+ *
+ * @param[in] btf_types The BTF types object.
+ * @param[in] name The name of the map or empty string if the name is not
+ * available.
+ * @param[in] map_type_id The ID of the struct type for the map.
+ * @return btf_map_definition
+ */
 static btf_map_definition
 _get_map_definition_from_btf(const btf_type_data &btf_types,
-                             btf_type_id map_type_id) {
+                             const std::string &name, btf_type_id map_type_id) {
   btf_type_id type = 0;
   btf_type_id max_entries = 0;
   btf_type_id key = 0;
@@ -86,8 +96,7 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
   btf_type_id value_size = 0;
   btf_type_id values = 0;
 
-  auto map_var = btf_types.get_kind_type<btf_kind_var>(map_type_id);
-  auto map_struct = btf_types.get_kind_type<btf_kind_struct>(map_var.type);
+  auto map_struct = btf_types.get_kind_type<btf_kind_struct>(map_type_id);
 
   for (const auto &member : map_struct.members) {
     if (member.name == "type") {
@@ -112,10 +121,10 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
   }
 
   btf_map_definition map_definition = {};
-  map_definition.name = map_var.name;
+  map_definition.name = name;
 
   // Required fields.
-  map_definition.type_id = map_var.type;
+  map_definition.type_id = map_type_id;
   map_definition.map_type = _value_from_BTF__uint(btf_types, type);
   map_definition.max_entries = _value_from_BTF__uint(btf_types, max_entries);
 
@@ -166,14 +175,51 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
 
 std::vector<btf_map_definition>
 parse_btf_map_section(const btf_type_data &btf_data) {
-  std::vector<btf_map_definition> map_definitions;
+  std::map<btf_type_id, btf_map_definition> map_definitions;
+  std::set<btf_type_id> inner_map_type_ids;
+  // Get the .maps data section.
   auto maps_section =
       btf_data.get_kind_type<btf_kind_data_section>(btf_data.get_id(".maps"));
 
+  // Helper function to add a map definition to the map definitions and add the
+  // inner map type ID to the list of inner map type IDs if it is present.
+  auto handle_map_type_id = [&](const std::string &name,
+                                btf_type_id map_type_id) {
+    auto map_definition =
+        _get_map_definition_from_btf(btf_data, name, map_type_id);
+    map_definitions[map_definition.type_id] = map_definition;
+    // Add the inner map type ID to the list of inner map type IDs if it is
+    // present.
+    if (map_definition.inner_map_type_id != 0) {
+      inner_map_type_ids.insert(map_definition.inner_map_type_id);
+    }
+  };
+
+  // Add all maps in the .maps data section.
   for (const auto &var : maps_section.members) {
-    map_definitions.push_back(_get_map_definition_from_btf(btf_data, var.type));
+    auto map_var = btf_data.get_kind_type<btf_kind_var>(var.type);
+    handle_map_type_id(map_var.name, map_var.type);
   }
-  return map_definitions;
+
+  // Recursively add all inner maps. Assume that there are at most two levels of
+  // inner maps. This is the current limit imposed by the BPF verifier on Linux.
+  for (size_t inner_map_recursion_level = 0; inner_map_recursion_level < 2;
+       inner_map_recursion_level++) {
+    // Add all maps that are not in the .maps data section.
+    for (const auto &map_type_id : inner_map_type_ids) {
+      // Skip if the map is already present.
+      if (map_definitions.find(map_type_id) != map_definitions.end()) {
+        continue;
+      }
+      handle_map_type_id("", map_type_id);
+    }
+  }
+
+  std::vector<btf_map_definition> map_definitions_vector;
+  for (const auto &map_definition : map_definitions) {
+    map_definitions_vector.push_back(map_definition.second);
+  }
+  return map_definitions_vector;
 }
 
 btf_type_id btf_uint_from_value(btf_type_data &btf_data, uint32_t value) {
