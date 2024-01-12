@@ -75,9 +75,18 @@ static bool _is_map_type(const btf_type_data &btf_types,
          (has_value || has_value_size || has_values);
 }
 
+/**
+ * @brief Accept a BTF type ID for a map and return a BTF map definition.
+ *
+ * @param[in] btf_types The BTF types object.
+ * @param[in] name The name of the map or empty string if the name is not
+ * available.
+ * @param[in] map_type_id The ID of the struct type for the map.
+ * @return btf_map_definition
+ */
 static btf_map_definition
 _get_map_definition_from_btf(const btf_type_data &btf_types,
-                             btf_type_id map_type_id) {
+                             const std::string &name, btf_type_id map_type_id) {
   btf_type_id type = 0;
   btf_type_id max_entries = 0;
   btf_type_id key = 0;
@@ -86,8 +95,7 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
   btf_type_id value_size = 0;
   btf_type_id values = 0;
 
-  auto map_var = btf_types.get_kind_type<btf_kind_var>(map_type_id);
-  auto map_struct = btf_types.get_kind_type<btf_kind_struct>(map_var.type);
+  auto map_struct = btf_types.get_kind_type<btf_kind_struct>(map_type_id);
 
   for (const auto &member : map_struct.members) {
     if (member.name == "type") {
@@ -112,10 +120,10 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
   }
 
   btf_map_definition map_definition = {};
-  map_definition.name = map_var.name;
+  map_definition.name = name;
 
   // Required fields.
-  map_definition.type_id = map_var.type;
+  map_definition.type_id = map_type_id;
   map_definition.map_type = _value_from_BTF__uint(btf_types, type);
   map_definition.max_entries = _value_from_BTF__uint(btf_types, max_entries);
 
@@ -167,12 +175,32 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
 std::vector<btf_map_definition>
 parse_btf_map_section(const btf_type_data &btf_data) {
   std::vector<btf_map_definition> map_definitions;
+  // Keep track of map type IDs to detect maps without a top-level definition.
+  std::set<btf_type_id> map_type_ids;
   auto maps_section =
       btf_data.get_kind_type<btf_kind_data_section>(btf_data.get_id(".maps"));
 
   for (const auto &var : maps_section.members) {
-    map_definitions.push_back(_get_map_definition_from_btf(btf_data, var.type));
+    auto map_var = btf_data.get_kind_type<btf_kind_var>(var.type);
+    map_definitions.push_back(
+        _get_map_definition_from_btf(btf_data, map_var.name, map_var.type));
+    map_type_ids.insert(map_var.type);
   }
+
+  // Check for maps without a top-level definition.
+  for (const auto &map : map_definitions) {
+    if (map.inner_map_type_id != 0) {
+      if (map_type_ids.find(map.inner_map_type_id) != map_type_ids.end()) {
+        continue;
+      }
+
+      // Add a top-level definition for the inner map.
+      map_definitions.push_back(
+          _get_map_definition_from_btf(btf_data, "", map.inner_map_type_id));
+      map_type_ids.insert(map.inner_map_type_id);
+    }
+  }
+
   return map_definitions;
 }
 
