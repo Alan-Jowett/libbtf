@@ -27,7 +27,8 @@ static uint32_t _value_from_BTF__uint(const btf_type_data &btf_types,
 }
 
 /**
- * @brief Walk the type chain removing typedefs, const, and volatile until any other type is found.
+ * @brief Walk the type chain removing typedefs, const, and volatile until any
+ * other type is found.
  *
  * @param[in] btf_types The BTF types object.
  * @param[in] type_id The type ID to unwrap.
@@ -35,7 +36,7 @@ static uint32_t _value_from_BTF__uint(const btf_type_data &btf_types,
  */
 static btf_type_id _unwrap_type(const btf_type_data &btf_types,
                                 btf_type_id type_id) {
-  for(;;) {
+  for (;;) {
     switch (btf_types.get_kind_index(type_id)) {
     case BTF_KIND_TYPEDEF:
       type_id = btf_types.get_kind_type<btf_kind_typedef>(type_id).type;
