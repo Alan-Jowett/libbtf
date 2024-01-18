@@ -26,12 +26,31 @@ static uint32_t _value_from_BTF__uint(const btf_type_data &btf_types,
   return btf_types.get_kind_type<btf_kind_array>(type_id).count_of_elements;
 }
 
-static btf_type_id _unwrap_typedef(const btf_type_data &btf_types,
+/**
+ * @brief Walk the type chain removing typedefs, const, and volatile until a struct is found.
+ *
+ * @param[in] btf_types The BTF types object.
+ * @param[in] type_id The type ID to unwrap.
+ * @return The unwrapped type ID.
+ */
+static btf_type_id _unwrap_type(const btf_type_data &btf_types,
                                    btf_type_id type_id) {
-  if (btf_types.get_kind_index(type_id) != BTF_KIND_TYPEDEF) {
-    return type_id;
+  while  (btf_types.get_kind_index(type_id) != BTF_KIND_STRUCT) {
+    switch (btf_types.get_kind_index(type_id)) {
+    case BTF_KIND_TYPEDEF:
+      type_id = btf_types.get_kind_type<btf_kind_typedef>(type_id).type;
+      break;
+    case BTF_KIND_CONST:
+      type_id = btf_types.get_kind_type<btf_kind_const>(type_id).type;
+      break;
+    case BTF_KIND_VOLATILE:
+      type_id = btf_types.get_kind_type<btf_kind_volatile>(type_id).type;
+      break;
+    default:
+      throw std::runtime_error("invalid type");
+    }
   }
-  return btf_types.get_kind_type<btf_kind_typedef>(type_id).type;
+  return type_id;
 }
 
 /**
@@ -104,7 +123,7 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
   btf_type_id value_size = 0;
   btf_type_id values = 0;
 
-  map_type_id = _unwrap_typedef(btf_types, map_type_id);
+  map_type_id = _unwrap_type(btf_types, map_type_id);
 
   auto map_struct = btf_types.get_kind_type<btf_kind_struct>(map_type_id);
 
@@ -164,7 +183,7 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
     auto values_array = btf_types.get_kind_type<btf_kind_array>(values);
     auto ptr = btf_types.get_kind_type<btf_kind_ptr>(values_array.element_type);
 
-    auto inner_map_type_id = _unwrap_typedef(btf_types, ptr.type);
+    auto inner_map_type_id = _unwrap_type(btf_types, ptr.type);
 
     if (_is_map_type(btf_types, inner_map_type_id)) {
       // Value is a map.
