@@ -27,15 +27,15 @@ static uint32_t _value_from_BTF__uint(const btf_type_data &btf_types,
 }
 
 /**
- * @brief Walk the type chain removing typedefs, const, and volatile until a struct is found.
+ * @brief Walk the type chain removing typedefs, const, and volatile until any other type is found.
  *
  * @param[in] btf_types The BTF types object.
  * @param[in] type_id The type ID to unwrap.
  * @return The unwrapped type ID.
  */
 static btf_type_id _unwrap_type(const btf_type_data &btf_types,
-                                   btf_type_id type_id) {
-  while  (btf_types.get_kind_index(type_id) != BTF_KIND_STRUCT) {
+                                btf_type_id type_id) {
+  for(;;) {
     switch (btf_types.get_kind_index(type_id)) {
     case BTF_KIND_TYPEDEF:
       type_id = btf_types.get_kind_type<btf_kind_typedef>(type_id).type;
@@ -47,10 +47,9 @@ static btf_type_id _unwrap_type(const btf_type_data &btf_types,
       type_id = btf_types.get_kind_type<btf_kind_volatile>(type_id).type;
       break;
     default:
-      throw std::runtime_error("invalid type");
+      return type_id;
     }
   }
-  return type_id;
 }
 
 /**
