@@ -17,4 +17,4 @@ add_library("libbtf" STATIC
     "btf_write.h"
 )
 
-target_include_directories("libbtf" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories("libbtf" INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
