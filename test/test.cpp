@@ -41,7 +41,7 @@ std::map<std::string, std::string> string_replacements = {
 
 #define TEST_OBJECT_FILE_DIRECTORY "external/ebpf-samples/build/"
 #define TEST_SOURCE_FILE_DIRECTORY "external/ebpf-samples/src/"
-#define TEST_JSON_FILE_DIRECTORY "external/ebpf-samples/json/"
+#define TEST_JSON_FILE_DIRECTORY "json/"
 #define TEST_C_HEADER_FILE_DIRECTORY "test/expected/"
 #define BTF_CASE(file, apply_replacements)                                     \
   TEST_CASE("BTF JSON suite: " file, "[json]") {                               \
