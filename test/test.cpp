@@ -608,6 +608,33 @@ TEST_CASE("btf_maps_map_in_map", "[parsing][json]") {
   REQUIRE(map_definitions[0].inner_map_type_id == 0);
 }
 
+TEST_CASE("btf_maps_ringbuf_in_map", "[parsing][json]") {
+  auto reader = ELFIO::elfio();
+  std::string file = "ringbuf_in_map";
+  REQUIRE(reader.load(std::string(TEST_OBJECT_FILE_DIRECTORY) + file + ".o"));
+
+  auto btf = reader.sections[".BTF"];
+
+  libbtf::btf_type_data btf_data = std::vector<std::byte>(
+      {reinterpret_cast<const std::byte *>(btf->get_data()),
+       reinterpret_cast<const std::byte *>(btf->get_data() + btf->get_size())});
+
+  auto map_definitions = libbtf::parse_btf_map_section(btf_data);
+  REQUIRE(map_definitions.size() == 2);
+
+  // Verify that each map was parsed correctly.
+  REQUIRE(map_definitions[1].name == "array_of_maps");
+  REQUIRE(map_definitions[1].map_type == 12); // BPF_MAP_TYPE_ARRAY_OF_MAPS
+  REQUIRE(map_definitions[1].key_size == 4);
+  REQUIRE(map_definitions[1].value_size == 4);
+  REQUIRE(map_definitions[1].max_entries == 1);
+  REQUIRE(map_definitions[1].inner_map_type_id != 0);
+
+  REQUIRE(map_definitions[0].name == "inner_map");
+  REQUIRE(map_definitions[0].map_type == 27); // BPF_MAP_TYPE_ARRAY
+  REQUIRE(map_definitions[0].max_entries == 256 * 1024);
+}
+
 TEST_CASE("btf_maps_map_in_map_anonymous", "[parsing][json]") {
   auto reader = ELFIO::elfio();
   std::string file = "map_in_map_anonymous";
