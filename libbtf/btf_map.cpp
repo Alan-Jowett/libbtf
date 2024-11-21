@@ -58,8 +58,6 @@ static btf_type_id _unwrap_type(const btf_type_data &btf_types,
  * is a struct with the following members:
  * - type
  * - max_entries
- * - key or key_size
- * - value or value_size or values
  *
  * @param btf_types The BTF types object.
  * @param map_type_id The type id of the type to check.
