@@ -75,32 +75,16 @@ static bool _is_map_type(const btf_type_data &btf_types,
   auto map_struct = btf_types.get_kind_type<btf_kind_struct>(map_type_id);
   bool has_type = false;
   bool has_max_entries = false;
-  bool has_key = false;
-  bool has_key_size = false;
-  bool has_value = false;
-  bool has_value_size = false;
-  bool has_values = false;
 
   for (const auto &member : map_struct.members) {
     if (member.name == "type") {
       has_type = true;
     } else if (member.name == "max_entries") {
       has_max_entries = true;
-    } else if (member.name == "key") {
-      has_key = true;
-    } else if (member.name == "key_size") {
-      has_key_size = true;
-    } else if (member.name == "value") {
-      has_value = true;
-    } else if (member.name == "value_size") {
-      has_value_size = true;
-    } else if (member.name == "values") {
-      has_values = true;
     }
   }
 
-  return has_type && has_max_entries && (has_key || has_key_size) &&
-         (has_value || has_value_size || has_values);
+  return has_type && has_max_entries;
 }
 
 /**
