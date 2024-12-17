@@ -33,6 +33,18 @@ std::vector<btf_map_definition>
 parse_btf_map_section(const btf_type_data &btf_data);
 
 /**
+ * @brief Extract BTF map definitions for global variables from a
+ * BTF_KIND_DATA_SECTION section with name "section_name".
+ *
+ * @param[in] btf_data BTF data.
+ * @param[in] section_name Name of the section to parse.
+ * @return std::vector<btf_map_definition>
+ */
+std::vector<btf_map_definition>
+parse_btf_variable_section(const btf_type_data &btf_data,
+                           const std::string &section_name);
+
+/**
  * @brief Add a BTF_KIND_DATA_SECTION section with name ".maps" to a collection
  * of BTF data.
  *

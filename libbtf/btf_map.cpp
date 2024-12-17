@@ -187,6 +187,36 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
 }
 
 std::vector<btf_map_definition>
+parse_btf_variable_section(const btf_type_data &btf_data,
+                           const std::string &section_name) {
+  std::multimap<btf_type_id, btf_map_definition> map_definitions;
+  // Get the section_name data section.
+  auto bss_section = btf_data.get_kind_type<btf_kind_data_section>(
+      btf_data.get_id(section_name));
+
+  // Turn each BTF_KIND_VAR into a map definition of type array with the size
+  // of the variable.
+  for (const auto &var : bss_section.members) {
+    auto map_var = btf_data.get_kind_type<btf_kind_var>(var.type);
+    btf_map_definition map_definition = {};
+    map_definition.name = map_var.name;
+    map_definition.type_id = var.type;
+    map_definition.map_type = 0;
+    map_definition.value_size = var.size;
+    map_definition.max_entries = 1;
+    map_definition.key_size = 4;
+    map_definitions.insert({map_definition.type_id, map_definition});
+  }
+
+  std::vector<btf_map_definition> map_definitions_vector;
+  for (const auto &map_definition : map_definitions) {
+    map_definitions_vector.push_back(map_definition.second);
+  }
+
+  return map_definitions_vector;
+}
+
+std::vector<btf_map_definition>
 parse_btf_map_section(const btf_type_data &btf_data) {
   std::multimap<btf_type_id, btf_map_definition> map_definitions;
   std::set<btf_type_id> inner_map_type_ids;

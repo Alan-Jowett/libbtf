@@ -780,3 +780,52 @@ TEST_CASE("build_btf_map_section", "[btf_type_data]") {
   REQUIRE(generated_map_definitions[0].inner_map_type_id ==
           generated_map_definitions[1].type_id);
 }
+
+TEST_CASE("build_btf_map_section_for_globals", "[btf_type_data]") {
+  std::vector<libbtf::btf_map_definition> map_definitions;
+  auto reader = ELFIO::elfio();
+  std::string file = "global_variable";
+  REQUIRE(reader.load(std::string(TEST_OBJECT_FILE_DIRECTORY) + file + ".o"));
+
+  auto btf = reader.sections[".BTF"];
+
+  libbtf::btf_type_data btf_data = std::vector<std::byte>(
+      {reinterpret_cast<const std::byte *>(btf->get_data()),
+       reinterpret_cast<const std::byte *>(btf->get_data() + btf->get_size())});
+
+  std::vector<libbtf::btf_map_definition> expected_map_definitions = {
+      {
+          .name = "global_var",
+          .type_id = 8,
+          .key_size = 4,
+          .value_size = 4,
+          .max_entries = 1,
+      },
+      {
+          .name = "global_var_2",
+          .type_id = 9,
+          .key_size = 4,
+          .value_size = 4,
+          .max_entries = 1,
+      }};
+
+  std::vector<libbtf::btf_map_definition> generated_map_definitions =
+      libbtf::parse_btf_variable_section(btf_data, ".bss");
+
+  REQUIRE(generated_map_definitions.size() == 2);
+
+  for (auto i = 0; i < generated_map_definitions.size(); i++) {
+    REQUIRE(generated_map_definitions[i].name ==
+            expected_map_definitions[i].name);
+    REQUIRE(generated_map_definitions[i].type_id ==
+            expected_map_definitions[i].type_id);
+    REQUIRE(generated_map_definitions[i].map_type ==
+            expected_map_definitions[i].map_type);
+    REQUIRE(generated_map_definitions[i].key_size ==
+            expected_map_definitions[i].key_size);
+    REQUIRE(generated_map_definitions[i].value_size ==
+            expected_map_definitions[i].value_size);
+    REQUIRE(generated_map_definitions[i].max_entries ==
+            expected_map_definitions[i].max_entries);
+  }
+}
