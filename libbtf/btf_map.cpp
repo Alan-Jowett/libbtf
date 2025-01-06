@@ -189,43 +189,75 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
 std::vector<btf_map_definition>
 parse_btf_map_section(const btf_type_data &btf_data) {
   std::multimap<btf_type_id, btf_map_definition> map_definitions;
-  std::set<btf_type_id> inner_map_type_ids;
-  // Get the .maps data section.
-  auto maps_section =
-      btf_data.get_kind_type<btf_kind_data_section>(btf_data.get_id(".maps"));
 
-  // Helper function to add a map definition to the map definitions and add the
-  // inner map type ID to the list of inner map type IDs if it is present.
-  auto handle_map_type_id = [&](const std::string &name,
-                                btf_type_id map_type_id) {
-    auto map_definition =
-        _get_map_definition_from_btf(btf_data, name, map_type_id);
-    map_definitions.insert({map_definition.type_id, map_definition});
-    // Add the inner map type ID to the list of inner map type IDs if it is
-    // present.
-    if (map_definition.inner_map_type_id != 0) {
-      inner_map_type_ids.insert(map_definition.inner_map_type_id);
+  if (btf_data.get_id(".maps") != 0) {
+    std::set<btf_type_id> inner_map_type_ids;
+
+    // Get the .maps data section.
+    auto maps_section =
+        btf_data.get_kind_type<btf_kind_data_section>(btf_data.get_id(".maps"));
+
+    // Helper function to add a map definition to the map definitions and add the
+    // inner map type ID to the list of inner map type IDs if it is present.
+    auto handle_map_type_id = [&](const std::string &name,
+                                  btf_type_id map_type_id) {
+      auto map_definition =
+          _get_map_definition_from_btf(btf_data, name, map_type_id);
+      map_definitions.insert({map_definition.type_id, map_definition});
+      // Add the inner map type ID to the list of inner map type IDs if it is
+      // present.
+      if (map_definition.inner_map_type_id != 0) {
+        inner_map_type_ids.insert(map_definition.inner_map_type_id);
+      }
+    };
+
+    // Add all maps in the .maps data section.
+    for (const auto &var : maps_section.members) {
+      auto map_var = btf_data.get_kind_type<btf_kind_var>(var.type);
+      handle_map_type_id(map_var.name, map_var.type);
     }
-  };
 
-  // Add all maps in the .maps data section.
-  for (const auto &var : maps_section.members) {
-    auto map_var = btf_data.get_kind_type<btf_kind_var>(var.type);
-    handle_map_type_id(map_var.name, map_var.type);
+    // Recursively add all inner maps. Assume that there are at most two levels of
+    // inner maps. This is the current limit imposed by the BPF verifier on Linux.
+    for (size_t inner_map_recursion_level = 0; inner_map_recursion_level < 2;
+        inner_map_recursion_level++) {
+      // Add all maps that are not in the .maps data section.
+      for (const auto &map_type_id : inner_map_type_ids) {
+        // Skip if the map is already present.
+        if (map_definitions.find(map_type_id) != map_definitions.end()) {
+          continue;
+        }
+        handle_map_type_id("", map_type_id);
+      }
+    }
   }
 
-  // Recursively add all inner maps. Assume that there are at most two levels of
-  // inner maps. This is the current limit imposed by the BPF verifier on Linux.
-  for (size_t inner_map_recursion_level = 0; inner_map_recursion_level < 2;
-       inner_map_recursion_level++) {
-    // Add all maps that are not in the .maps data section.
-    for (const auto &map_type_id : inner_map_type_ids) {
-      // Skip if the map is already present.
-      if (map_definitions.find(map_type_id) != map_definitions.end()) {
-        continue;
-      }
-      handle_map_type_id("", map_type_id);
-    }
+  // Add an array map for this data section.
+  auto handle_data_section = [&](btf_type_id data_section_id) {
+    auto data_section =
+        btf_data.get_kind_type<btf_kind_data_section>(data_section_id);
+    btf_map_definition map_definition = {};
+    map_definition.name = data_section.name;
+    map_definition.type_id = data_section_id;
+    map_definition.key_size = sizeof(uint32_t);
+    map_definition.value_size = data_section.members.back().offset + data_section.members.back().size;
+    map_definition.max_entries = 1;
+    map_definitions.insert({map_definition.type_id, map_definition});
+  };
+
+  // Create a map for .bss, if it exists.
+  if (btf_data.get_id(".bss") != 0) {
+    handle_data_section(btf_data.get_id(".bss"));
+  }
+
+  // Create a map for .data, if it exists.
+  if (btf_data.get_id(".data") != 0) {
+    handle_data_section(btf_data.get_id(".data"));
+  }
+
+  // Create a map for .rodata, if it exists.
+  if (btf_data.get_id(".rodata") != 0) {
+    handle_data_section(btf_data.get_id(".rodata"));
   }
 
   std::vector<btf_map_definition> map_definitions_vector;
