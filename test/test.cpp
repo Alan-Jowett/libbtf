@@ -780,3 +780,43 @@ TEST_CASE("build_btf_map_section", "[btf_type_data]") {
   REQUIRE(generated_map_definitions[0].inner_map_type_id ==
           generated_map_definitions[1].type_id);
 }
+
+TEST_CASE("parse_btf_map_section_globals", "[btf_type_data]") {
+  auto reader = ELFIO::elfio();
+  std::string file = "global_variable";
+  REQUIRE(reader.load(std::string(TEST_OBJECT_FILE_DIRECTORY) + file + ".o"));
+
+  auto btf = reader.sections[".BTF"];
+
+  libbtf::btf_type_data btf_data = std::vector<std::byte>(
+      {reinterpret_cast<const std::byte *>(btf->get_data()),
+       reinterpret_cast<const std::byte *>(btf->get_data() + btf->get_size())});
+
+  auto map_definitions = libbtf::parse_btf_map_section(btf_data);
+
+  REQUIRE(map_definitions.size() == 3);
+  REQUIRE(map_definitions[0].name == ".bss");
+  REQUIRE(map_definitions[0].type_id == 15);
+  REQUIRE(map_definitions[0].map_type == 0); // Undefined type
+  REQUIRE(map_definitions[0].key_size == 4);
+  REQUIRE(map_definitions[0].value_size == 8);
+  REQUIRE(map_definitions[0].max_entries == 1);
+  REQUIRE(map_definitions[0].inner_map_type_id == 0);
+
+  REQUIRE(map_definitions[1].name == ".data");
+  REQUIRE(map_definitions[1].type_id == 16);
+  REQUIRE(map_definitions[1].map_type == 0); // Undefined type
+  REQUIRE(map_definitions[1].key_size == 4);
+  REQUIRE(map_definitions[1].value_size == 40);
+  REQUIRE(map_definitions[1].max_entries == 1);
+  REQUIRE(map_definitions[1].inner_map_type_id == 0);
+
+  REQUIRE(map_definitions[2].name == ".rodata");
+  REQUIRE(map_definitions[2].type_id == 17);
+  REQUIRE(map_definitions[2].map_type == 0); // Undefined type
+  REQUIRE(map_definitions[2].key_size == 4);
+  REQUIRE(map_definitions[2].value_size == 4);
+  REQUIRE(map_definitions[2].max_entries == 1);
+  REQUIRE(map_definitions[2].inner_map_type_id == 0);
+
+}
