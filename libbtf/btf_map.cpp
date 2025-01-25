@@ -236,6 +236,9 @@ parse_btf_map_section(const btf_type_data &btf_data) {
   auto handle_data_section = [&](btf_type_id data_section_id) {
     auto data_section =
         btf_data.get_kind_type<btf_kind_data_section>(data_section_id);
+    if (data_section.members.empty()) { // Skip empty data sections.
+      return;
+    }
     btf_map_definition map_definition = {};
     map_definition.name = data_section.name;
     map_definition.type_id = data_section_id;
