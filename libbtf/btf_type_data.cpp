@@ -15,7 +15,7 @@
 
 namespace libbtf {
 
-btf_type_data::btf_type_data(const std::vector<std::byte> &btf_data) {
+btf_type_data::btf_type_data(const std::vector<std::byte> &btf_data, bool reject_cycles) {
   auto visitor = [&, this](btf_type_id id,
                            const std::optional<std::string> &name,
                            const btf_kind &kind) {
@@ -25,10 +25,14 @@ btf_type_data::btf_type_data(const std::vector<std::byte> &btf_data) {
     }
   };
   btf_parse_types(btf_data, visitor);
-  // Validate that the type graph is valid.
-  for (const auto &[id, kind] : id_to_kind) {
-    std::set<btf_type_id> visited;
-    validate_type_graph(id, visited);
+  // If reject_cycles is true, validate the type graph.
+  // This will throw an exception if there are cycles.
+  if (reject_cycles) {
+    // Validate that the type graph is valid.
+    for (const auto &[id, kind] : id_to_kind) {
+      std::set<btf_type_id> visited;
+      validate_type_graph(id, visited);
+    }
   }
 }
 
