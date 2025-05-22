@@ -42,8 +42,12 @@ public:
    * @brief Construct a new btf type data object from a vector of bytes.
    *
    * @param[in] btf_data The BTF data.
+   * @param[in] reject_cycles If true, reject cycles in the type graph.
+   * @throws std::runtime_error If the BTF data is invalid or if there are
+   * cycles in the type graph.
    */
-  btf_type_data(const std::vector<std::byte> &btf_data);
+  btf_type_data(const std::vector<std::byte> &btf_data,
+                bool reject_cycles = true);
 
   /**
    * @brief Destroy the btf type data object
