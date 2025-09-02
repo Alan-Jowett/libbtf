@@ -49,7 +49,6 @@ jobs:
       if: inputs.platform == 'macos-latest'
       run: |
         brew install \
-          cmake \
           ninja \
           ccache
 
