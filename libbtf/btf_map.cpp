@@ -10,7 +10,6 @@
 #include "btf_write.h"
 
 #include <algorithm>
-#include <linux/bpf>
 #include <stdexcept>
 
 namespace libbtf {
@@ -139,20 +138,11 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
   map_definition.type_id = map_type_id;
   map_definition.map_type = _value_from_BTF__uint(btf_types, type);
 
-  if (max_entries != 0) {
-    map_definition.max_entries = _value_from_BTF__uint(btf_types, max_entries);
-  } else {
-    // If max_entries is missing, apply our special case.
-    if (map_definition.map_type == BPF_MAP_TYPE_PERF_EVENT_ARRAY) {
-      // it's a perf event array, provide a default.
-      // The actual value is often the number of online CPUs, but 1 is a safe default.
-      map_definition.max_entries = 1;
-    } else {
-      // It's some other map type missing a mandatory field.
-      throw std::runtime_error("Map '" + name + "' is missing the 'max_entries' field.");
-    }
-  }
   // Optional fields.
+  if (max_entries) {
+    map_definition.max_entries = _value_from_BTF__uint(btf_types, max_entries);
+  }
+
   if (key) {
     size_t key_size_in_bytes = btf_types.get_size(key);
     if (key_size > UINT32_MAX) {
