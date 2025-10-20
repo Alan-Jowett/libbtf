@@ -77,6 +77,7 @@ public:
 
   btf_type_id dereference_pointer(btf_type_id id) const;
   uint32_t get_size(btf_type_id id) const;
+  uint32_t get_size(btf_type_id id, std::set<btf_type_id> &visited) const;
   void
   to_json(std::ostream &out,
           std::optional<std::function<bool(btf_type_id)>> = std::nullopt) const;
@@ -112,9 +113,16 @@ private:
 
   std::string get_type_name(btf_type_id id) const;
   std::string get_qualified_type_name(btf_type_id id) const;
+  std::string get_qualified_type_name(btf_type_id id,
+                                      std::set<btf_type_id> &visited) const;
   btf_type_id get_descendant_type_id(btf_type_id id) const;
+  btf_type_id get_descendant_type_id(btf_type_id id,
+                                     std::set<btf_type_id> &visited) const;
   std::string get_type_declaration(btf_type_id id, const std::string &name,
                                    size_t indent) const;
+  std::string get_type_declaration(btf_type_id id, const std::string &name,
+                                   size_t indent,
+                                   std::set<btf_type_id> &visited) const;
   std::map<btf_type_id, btf_kind> id_to_kind;
   std::map<std::string, btf_type_id> name_to_id;
 };
