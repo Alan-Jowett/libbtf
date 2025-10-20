@@ -1,0 +1,2 @@
+/usr/bin/ar qc liblibbtf.a CMakeFiles/libbtf.dir/btf_json.cpp.o CMakeFiles/libbtf.dir/btf_map.cpp.o CMakeFiles/libbtf.dir/btf_parse.cpp.o CMakeFiles/libbtf.dir/btf_type_data.cpp.o CMakeFiles/libbtf.dir/btf_write.cpp.o
+/usr/bin/ranlib liblibbtf.a
