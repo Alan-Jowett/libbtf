@@ -82,7 +82,7 @@ jobs:
       if: inputs.platform != 'windows-2022'
       working-directory: ${{github.workspace}}
       run: |
-        build/test/tests -d yes
+        build/test/tests -s -d yes
 
     - name: Tests - Windows
       if: inputs.platform == 'windows-2022'
