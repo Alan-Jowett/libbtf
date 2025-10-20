@@ -211,7 +211,15 @@ std::vector<btf_type_id> btf_type_data::dependency_order(
     if (!filter || (*filter)(local_id)) {
       match = true;
     }
+    std::set<btf_type_id> visited_in_traversal;
     auto pre = [&](btf_type_id visit_id) -> bool {
+      // Detect cycles - if we've already visited this node in the current
+      // traversal, stop to prevent infinite recursion
+      if (visited_in_traversal.find(visit_id) != visited_in_traversal.end()) {
+        return false;
+      }
+      visited_in_traversal.insert(visit_id);
+
       if (match) {
         filtered_types.insert(visit_id);
       }
@@ -225,7 +233,11 @@ std::vector<btf_type_id> btf_type_data::dependency_order(
       return true;
     };
 
-    visit_depth_first(pre, std::nullopt, local_id);
+    auto post = [&](btf_type_id visit_id) {
+      visited_in_traversal.erase(visit_id);
+    };
+
+    visit_depth_first(pre, post, local_id);
   }
 
   while (!parents.empty()) {
@@ -235,6 +247,16 @@ std::vector<btf_type_id> btf_type_data::dependency_order(
       if (child_set.empty()) {
         types_to_remove.push_back(id);
       }
+    }
+
+    // If we can't remove any types, we have a cycle
+    // Break to avoid infinite loop
+    if (types_to_remove.empty()) {
+      // Add remaining types (which are in a cycle) to the result
+      for (auto &[id, _] : parents) {
+        result.push_back(id);
+      }
+      break;
     }
 
     // Remove these parents from all children.

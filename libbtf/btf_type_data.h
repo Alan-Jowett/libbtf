@@ -77,7 +77,6 @@ public:
 
   btf_type_id dereference_pointer(btf_type_id id) const;
   uint32_t get_size(btf_type_id id) const;
-  uint32_t get_size(btf_type_id id, std::set<btf_type_id> &visited) const;
   void
   to_json(std::ostream &out,
           std::optional<std::function<bool(btf_type_id)>> = std::nullopt) const;
@@ -111,6 +110,7 @@ private:
   void validate_type_graph(btf_type_id id,
                            std::set<btf_type_id> &visited) const;
 
+  uint32_t get_size(btf_type_id id, std::set<btf_type_id> &visited) const;
   std::string get_type_name(btf_type_id id) const;
   std::string get_qualified_type_name(btf_type_id id) const;
   std::string get_qualified_type_name(btf_type_id id,

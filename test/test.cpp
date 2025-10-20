@@ -820,3 +820,78 @@ TEST_CASE("parse_btf_map_section_globals", "[btf_type_data]") {
   REQUIRE(map_definitions[2].inner_map_type_id == 0);
 
 }
+
+TEST_CASE("btf_type_data_with_cycles", "[btf_type_data]") {
+  // Create BTF data with cycles and verify it doesn't cause stack overflow
+  libbtf::btf_type_data btf_data;
+
+  // Create a typedef that points to itself (creates a cycle)
+  // Type 1: typedef type 2
+  libbtf::btf_kind_typedef type1;
+  type1.name = "type1";
+  type1.type = 2; // Points to type 2
+
+  // Type 2: typedef type 1 (creates a cycle)
+  libbtf::btf_kind_typedef type2;
+  type2.name = "type2";
+  type2.type = 1; // Points back to type 1
+
+  auto id1 = btf_data.append(type1);
+  auto id2 = btf_data.append(type2);
+
+  // Verify we created the expected types
+  REQUIRE(id1 == 1);
+  REQUIRE(id2 == 2);
+
+  // These operations should not cause stack overflow with cycles
+  REQUIRE_NOTHROW(btf_data.get_size(id1));
+  REQUIRE_NOTHROW(btf_data.get_size(id2));
+
+  // Get size should return 0 for cyclic types
+  REQUIRE(btf_data.get_size(id1) == 0);
+  REQUIRE(btf_data.get_size(id2) == 0);
+
+  // to_c_header should handle cycles without stack overflow
+  std::ostringstream c_header_output;
+  REQUIRE_NOTHROW(btf_data.to_c_header(c_header_output));
+
+  // to_json should also handle cycles
+  std::ostringstream json_output;
+  REQUIRE_NOTHROW(btf_data.to_json(json_output));
+
+  // Test with pointer cycle (more realistic scenario - linked list node)
+  libbtf::btf_type_data btf_data2;
+  
+  libbtf::btf_kind_struct struct1;
+  struct1.name = "node";
+  struct1.size_in_bytes = 16;
+  libbtf::btf_kind_struct_member member;
+  member.name = "next";
+  member.type = 2; // Points to a pointer (type 2)
+  member.offset_from_start_in_bits = 0;
+  struct1.members.push_back(member);
+
+  libbtf::btf_kind_ptr ptr1;
+  ptr1.type = 1; // Points back to the struct (type 1)
+
+  auto id_struct = btf_data2.append(struct1);
+  auto id_ptr = btf_data2.append(ptr1);
+
+  REQUIRE(id_struct == 1);
+  REQUIRE(id_ptr == 2);
+
+  // This should not cause stack overflow
+  REQUIRE_NOTHROW(btf_data2.get_size(id_struct));
+  REQUIRE_NOTHROW(btf_data2.get_size(id_ptr));
+
+  // Pointer should have size of pointer
+  REQUIRE(btf_data2.get_size(id_ptr) == sizeof(void *));
+
+  // to_c_header should handle struct with pointer cycle
+  std::ostringstream c_header_output2;
+  REQUIRE_NOTHROW(btf_data2.to_c_header(c_header_output2));
+
+  // to_json should also work
+  std::ostringstream json_output2;
+  REQUIRE_NOTHROW(btf_data2.to_json(json_output2));
+}
