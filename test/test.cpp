@@ -1152,7 +1152,7 @@ TEST_CASE("validate-parse_btf_map_section-with-cycles", "[validation]") {
     // Create int type that references itself through typedef (cycle)
     btf_data.append(libbtf::btf_kind_typedef{.name = "cyclic_int",
                                              .type = 8}); // id 6 -> id 8
-    libbtf::btf_kind_int array_size_type;
+    libbtf::btf_kind_int array_size_type{};
     array_size_type.name = "__ARRAY_SIZE_TYPE__";
     array_size_type.size_in_bytes = 4;
     array_size_type.field_width_in_bits = 32;
