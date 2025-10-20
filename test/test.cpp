@@ -1826,6 +1826,7 @@ TEST_CASE("internal_helper_function_coverage", "[internal]") {
                                           {.name = "VAL2", .value = 2},
                                           {.name = "VAL3", .value = 3}},
                               .size_in_bytes = 4});
+    REQUIRE(enum_id != 0);
 
     std::stringstream json_output;
     btf_data.to_json(json_output);
@@ -1900,6 +1901,7 @@ TEST_CASE("internal_helper_function_coverage", "[internal]") {
                                              .is_signed = true,
                                              .is_char = false,
                                              .is_bool = false});
+    REQUIRE(int_id != 0);
 
     auto struct_id = btf_data.append(
         libbtf::btf_kind_struct{.name = "test_struct",
@@ -1910,6 +1912,7 @@ TEST_CASE("internal_helper_function_coverage", "[internal]") {
                                              .type = int_id,
                                              .offset_from_start_in_bits = 32}},
                                 .size_in_bytes = 8});
+    REQUIRE(struct_id != 0);
 
     // This will internally use write_btf() to serialize each type
     auto serialized = btf_data.to_bytes();
@@ -1928,9 +1931,11 @@ TEST_CASE("internal_helper_function_coverage", "[internal]") {
     auto struct_with_optional_name = btf_data.append(
         libbtf::btf_kind_struct{.name = std::nullopt, // Optional name
                                 .members = {}});
+    REQUIRE(struct_with_optional_name != 0);
 
     auto struct_with_name = btf_data.append(
         libbtf::btf_kind_struct{.name = "named_struct", .members = {}});
+    REQUIRE(struct_with_name != 0);
 
     // Generate JSON - this exercises _print_json_value with both optional and
     // regular values
@@ -1962,6 +1967,8 @@ TEST_CASE("internal_helper_function_coverage", "[internal]") {
 
     auto ptr_to_const_int_id =
         btf_data.append(libbtf::btf_kind_ptr{.type = const_int_id});
+
+    REQUIRE(ptr_to_const_int_id != 0);
 
     // Generate C header - this exercises the private member functions
     std::stringstream c_header;
