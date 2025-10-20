@@ -12,6 +12,11 @@
 #include <string>
 #include <vector>
 
+// Forward declaration for cycle_detector to avoid circular includes
+namespace libbtf {
+class cycle_detector;
+}
+
 #define LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(INDEX, TYPE)                        \
   template <>                                                                  \
   inline TYPE btf_type_data::get_kind_type<TYPE>(btf_type_id id) const {       \
@@ -74,7 +79,6 @@ public:
 
   btf_type_id dereference_pointer(btf_type_id id) const;
   uint32_t get_size(btf_type_id id) const;
-  uint32_t get_size(btf_type_id id, std::set<btf_type_id> &visited) const;
   void
   to_json(std::ostream &out,
           std::optional<std::function<bool(btf_type_id)>> = std::nullopt) const;
@@ -105,21 +109,25 @@ private:
   btf_kind get_kind(btf_type_id id) const;
 
   void update_name_to_id(btf_type_id id);
-  void validate_type_graph(btf_type_id id,
-                           std::set<btf_type_id> &visited) const;
+
+  std::string
+  get_qualified_type_name_with_detector(btf_type_id id,
+                                        cycle_detector &detector) const;
+  btf_type_id
+  get_descendant_type_id_with_detector(btf_type_id id,
+                                       cycle_detector &detector) const;
+  std::string
+  get_type_declaration_with_detector(btf_type_id id, const std::string &name,
+                                     size_t indent,
+                                     cycle_detector &detector) const;
 
   std::string get_type_name(btf_type_id id) const;
-  std::string get_qualified_type_name(btf_type_id id) const;
-  std::string get_qualified_type_name(btf_type_id id,
-                                      std::set<btf_type_id> &visited) const;
-  btf_type_id get_descendant_type_id(btf_type_id id) const;
-  btf_type_id get_descendant_type_id(btf_type_id id,
-                                     std::set<btf_type_id> &visited) const;
   std::string get_type_declaration(btf_type_id id, const std::string &name,
-                                   size_t indent) const;
-  std::string get_type_declaration(btf_type_id id, const std::string &name,
-                                   size_t indent,
-                                   std::set<btf_type_id> &visited) const;
+                                   size_t indent = 0) const;
+
+  uint32_t get_size_with_detector(btf_type_id id,
+                                  cycle_detector &detector) const;
+
   std::map<btf_type_id, btf_kind> id_to_kind;
   std::map<std::string, btf_type_id> name_to_id;
 };

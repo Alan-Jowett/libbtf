@@ -8,6 +8,7 @@
 #include "btf_parse.h"
 #include "btf_type_data.h"
 #include "btf_write.h"
+#include "cycle_detector.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -36,15 +37,17 @@ static uint32_t _value_from_BTF__uint(const btf_type_data &btf_types,
  */
 static btf_type_id _unwrap_type(const btf_type_data &btf_types,
                                 btf_type_id type_id) {
-  std::set<btf_type_id> visited;
+  libbtf::cycle_detector detector;
 
   for (;;) {
-    // Check for cycles
-    if (visited.find(type_id) != visited.end()) {
+    // Check for cycles using the detector
+    if (detector.would_create_cycle(type_id)) {
       // Cycle detected - return current type_id to break the cycle
       return type_id;
     }
-    visited.insert(type_id);
+
+    // Mark as visited (no need to unmark since we don't recurse)
+    detector.mark_visited(type_id);
 
     switch (btf_types.get_kind_index(type_id)) {
     case BTF_KIND_TYPEDEF:
@@ -55,6 +58,9 @@ static btf_type_id _unwrap_type(const btf_type_data &btf_types,
       break;
     case BTF_KIND_VOLATILE:
       type_id = btf_types.get_kind_type<btf_kind_volatile>(type_id).type;
+      break;
+    case BTF_KIND_RESTRICT:
+      type_id = btf_types.get_kind_type<btf_kind_restrict>(type_id).type;
       break;
     default:
       return type_id;

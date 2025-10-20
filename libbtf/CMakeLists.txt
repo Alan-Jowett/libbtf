@@ -15,6 +15,7 @@ add_library("libbtf" STATIC
     "btf_type_data.h"
     "btf_write.cpp"
     "btf_write.h"
+    "cycle_detector.h"
 )
 
 target_include_directories("libbtf" INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>")
