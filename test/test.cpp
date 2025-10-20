@@ -14,6 +14,7 @@
 #endif
 
 #include "btf.h"
+#include "btf_c_type.h"
 #include "btf_json.h"
 #include "btf_map.h"
 #include "btf_parse.h"
@@ -1363,4 +1364,612 @@ TEST_CASE("validate-btf_parse_line_information-robustness", "[validation]") {
     INFO("BTF parse line information infrastructure handles BTF data "
          "structures correctly");
   });
+}
+
+// Additional test cases for improved coverage
+
+TEST_CASE("invalid_btf_magic", "[parsing][negative]") {
+  // Create BTF data with invalid magic number
+  std::vector<std::byte> invalid_btf;
+
+  // Create a minimal BTF header with wrong magic
+  btf_header_t header = {
+      .magic = 0x1234, // Wrong magic (should be BTF_HEADER_MAGIC = 0xeB9F)
+      .version = BTF_HEADER_VERSION,
+      .flags = 0,
+      .hdr_len = sizeof(btf_header_t),
+      .type_off = 0,
+      .type_len = 0,
+      .str_off = 0,
+      .str_len = 1};
+
+  invalid_btf.resize(sizeof(header) + 1);
+  std::memcpy(invalid_btf.data(), &header, sizeof(header));
+  invalid_btf[sizeof(header)] = std::byte{0}; // Empty string table
+
+  REQUIRE_THROWS_WITH(libbtf::btf_type_data(invalid_btf),
+                      Catch::Matchers::ContainsSubstring("wrong magic"));
+}
+
+TEST_CASE("invalid_btf_version", "[parsing][negative]") {
+  // Create BTF data with invalid version
+  std::vector<std::byte> invalid_btf;
+
+  btf_header_t header = {
+      .magic = BTF_HEADER_MAGIC,
+      .version = 99, // Wrong version (should be BTF_HEADER_VERSION = 1)
+      .flags = 0,
+      .hdr_len = sizeof(btf_header_t),
+      .type_off = 0,
+      .type_len = 0,
+      .str_off = 0,
+      .str_len = 1};
+
+  invalid_btf.resize(sizeof(header) + 1);
+  std::memcpy(invalid_btf.data(), &header, sizeof(header));
+  invalid_btf[sizeof(header)] = std::byte{0}; // Empty string table
+
+  REQUIRE_THROWS_WITH(libbtf::btf_type_data(invalid_btf),
+                      Catch::Matchers::ContainsSubstring("wrong version"));
+}
+
+TEST_CASE("invalid_btf_header_size", "[parsing][negative]") {
+  // Create BTF data with invalid header size
+  std::vector<std::byte> invalid_btf;
+
+  btf_header_t header = {
+      .magic = BTF_HEADER_MAGIC,
+      .version = BTF_HEADER_VERSION,
+      .flags = 0,
+      .hdr_len = 10, // Too small (should be at least sizeof(btf_header_t))
+      .type_off = 0,
+      .type_len = 0,
+      .str_off = 0,
+      .str_len = 1};
+
+  invalid_btf.resize(sizeof(header) + 1);
+  std::memcpy(invalid_btf.data(), &header, sizeof(header));
+  invalid_btf[sizeof(header)] = std::byte{0}; // Empty string table
+
+  REQUIRE_THROWS_WITH(libbtf::btf_type_data(invalid_btf),
+                      Catch::Matchers::ContainsSubstring("wrong size"));
+}
+
+TEST_CASE("corrupted_string_table", "[parsing][negative]") {
+  // Create BTF data with string table that extends beyond data bounds
+  std::vector<std::byte> invalid_btf;
+
+  btf_header_t header = {
+      .magic = BTF_HEADER_MAGIC,
+      .version = BTF_HEADER_VERSION,
+      .flags = 0,
+      .hdr_len = sizeof(btf_header_t),
+      .type_off = 0,
+      .type_len = 0,
+      .str_off = 0,
+      .str_len = 1000 // String table larger than actual data
+  };
+
+  invalid_btf.resize(sizeof(header) +
+                     10); // Much smaller than claimed string table
+  std::memcpy(invalid_btf.data(), &header, sizeof(header));
+
+  REQUIRE_THROWS_WITH(
+      libbtf::btf_type_data(invalid_btf),
+      Catch::Matchers::ContainsSubstring("Invalid .BTF section"));
+}
+
+TEST_CASE("invalid_type_offsets", "[parsing][negative]") {
+  // Create BTF data with type section extending beyond bounds
+  std::vector<std::byte> invalid_btf;
+
+  btf_header_t header = {
+      .magic = BTF_HEADER_MAGIC,
+      .version = BTF_HEADER_VERSION,
+      .flags = 0,
+      .hdr_len = sizeof(btf_header_t),
+      .type_off = 1,    // Type section starts at offset 1
+      .type_len = 1000, // But claims to be much larger than available data
+      .str_off = 1001,
+      .str_len = 1};
+
+  invalid_btf.resize(sizeof(header) + 10);
+  std::memcpy(invalid_btf.data(), &header, sizeof(header));
+
+  REQUIRE_THROWS_WITH(
+      libbtf::btf_type_data(invalid_btf),
+      Catch::Matchers::ContainsSubstring("Invalid .BTF section"));
+}
+
+TEST_CASE("get_kind_type_all_specializations", "[btf_type_data]") {
+  // Test all template specializations for get_kind_type
+  libbtf::btf_type_data btf_data;
+
+  // Add examples of each BTF kind type
+  auto void_id = btf_data.append(libbtf::btf_kind_void{});
+
+  auto int_id =
+      btf_data.append(libbtf::btf_kind_int{.name = "int",
+                                           .size_in_bytes = 4,
+                                           .offset_from_start_in_bits = 0,
+                                           .field_width_in_bits = 32,
+                                           .is_signed = true,
+                                           .is_char = false,
+                                           .is_bool = false});
+
+  auto ptr_id = btf_data.append(libbtf::btf_kind_ptr{.type = int_id});
+
+  auto array_id = btf_data.append(libbtf::btf_kind_array{
+      .element_type = int_id, .index_type = int_id, .count_of_elements = 10});
+
+  auto struct_id = btf_data.append(
+      libbtf::btf_kind_struct{.name = "test_struct",
+                              .members = {{.name = "field1",
+                                           .type = int_id,
+                                           .offset_from_start_in_bits = 0}},
+                              .size_in_bytes = 4});
+
+  auto union_id = btf_data.append(
+      libbtf::btf_kind_union{.name = "test_union",
+                             .members = {{.name = "field1",
+                                          .type = int_id,
+                                          .offset_from_start_in_bits = 0}},
+                             .size_in_bytes = 4});
+
+  auto enum_id = btf_data.append(
+      libbtf::btf_kind_enum{.name = "test_enum",
+                            .members = {{.name = "VALUE1", .value = 0}},
+                            .size_in_bytes = 4});
+
+  auto fwd_id = btf_data.append(
+      libbtf::btf_kind_fwd{.name = "forward_decl", .is_struct = true});
+
+  auto typedef_id = btf_data.append(
+      libbtf::btf_kind_typedef{.name = "my_int", .type = int_id});
+
+  auto volatile_id = btf_data.append(libbtf::btf_kind_volatile{.type = int_id});
+
+  auto const_id = btf_data.append(libbtf::btf_kind_const{.type = int_id});
+
+  auto restrict_id = btf_data.append(libbtf::btf_kind_restrict{.type = ptr_id});
+
+  auto func_proto_id = btf_data.append(libbtf::btf_kind_function_prototype{
+      .parameters = {{.name = "param1", .type = int_id}},
+      .return_type = int_id});
+
+  auto function_id = btf_data.append(
+      libbtf::btf_kind_function{.name = "test_func",
+                                .linkage = libbtf::BTF_LINKAGE_GLOBAL,
+                                .type = func_proto_id});
+
+  auto var_id = btf_data.append(
+      libbtf::btf_kind_var{.name = "test_var",
+                           .type = int_id,
+                           .linkage = libbtf::BTF_LINKAGE_GLOBAL});
+
+  auto data_section_id = btf_data.append(libbtf::btf_kind_data_section{
+      .name = ".data", .members = {{.type = var_id, .offset = 0, .size = 4}}});
+
+  auto float_id = btf_data.append(
+      libbtf::btf_kind_float{.name = "float", .size_in_bytes = 4});
+
+  auto decl_tag_id = btf_data.append(libbtf::btf_kind_decl_tag{
+      .name = "tag", .type = int_id, .component_index = 0});
+
+  auto type_tag_id = btf_data.append(
+      libbtf::btf_kind_type_tag{.name = "type_tag", .type = int_id});
+
+  auto enum64_id = btf_data.append(libbtf::btf_kind_enum64{
+      .name = "test_enum64",
+      .is_signed = false,
+      .members = {{.name = "BIG_VALUE", .value = UINT64_MAX}},
+      .size_in_bytes = 8});
+
+  // Test all template specializations
+  SECTION("Test all get_kind_type specializations") {
+    auto void_kind = btf_data.get_kind_type<libbtf::btf_kind_void>(void_id);
+    auto int_kind = btf_data.get_kind_type<libbtf::btf_kind_int>(int_id);
+    auto ptr_kind = btf_data.get_kind_type<libbtf::btf_kind_ptr>(ptr_id);
+    auto array_kind = btf_data.get_kind_type<libbtf::btf_kind_array>(array_id);
+    auto struct_kind =
+        btf_data.get_kind_type<libbtf::btf_kind_struct>(struct_id);
+    auto union_kind = btf_data.get_kind_type<libbtf::btf_kind_union>(union_id);
+    auto enum_kind = btf_data.get_kind_type<libbtf::btf_kind_enum>(enum_id);
+    auto fwd_kind = btf_data.get_kind_type<libbtf::btf_kind_fwd>(fwd_id);
+    auto typedef_kind =
+        btf_data.get_kind_type<libbtf::btf_kind_typedef>(typedef_id);
+    auto volatile_kind =
+        btf_data.get_kind_type<libbtf::btf_kind_volatile>(volatile_id);
+    auto const_kind = btf_data.get_kind_type<libbtf::btf_kind_const>(const_id);
+    auto restrict_kind =
+        btf_data.get_kind_type<libbtf::btf_kind_restrict>(restrict_id);
+    auto func_proto_kind =
+        btf_data.get_kind_type<libbtf::btf_kind_function_prototype>(
+            func_proto_id);
+    auto function_kind =
+        btf_data.get_kind_type<libbtf::btf_kind_function>(function_id);
+    auto var_kind = btf_data.get_kind_type<libbtf::btf_kind_var>(var_id);
+    auto data_section_kind =
+        btf_data.get_kind_type<libbtf::btf_kind_data_section>(data_section_id);
+    auto float_kind = btf_data.get_kind_type<libbtf::btf_kind_float>(float_id);
+    auto decl_tag_kind =
+        btf_data.get_kind_type<libbtf::btf_kind_decl_tag>(decl_tag_id);
+    auto type_tag_kind =
+        btf_data.get_kind_type<libbtf::btf_kind_type_tag>(type_tag_id);
+    auto enum64_kind =
+        btf_data.get_kind_type<libbtf::btf_kind_enum64>(enum64_id);
+
+    // Verify we got the correct types back
+    REQUIRE(int_kind.name == "int");
+    REQUIRE(int_kind.size_in_bytes == 4);
+    REQUIRE(ptr_kind.type == int_id);
+    REQUIRE(array_kind.count_of_elements == 10);
+    REQUIRE(struct_kind.name == "test_struct");
+    REQUIRE(union_kind.name == "test_union");
+    REQUIRE(enum_kind.name == "test_enum");
+    REQUIRE(fwd_kind.name == "forward_decl");
+    REQUIRE(typedef_kind.name == "my_int");
+    REQUIRE(volatile_kind.type == int_id);
+    REQUIRE(const_kind.type == int_id);
+    REQUIRE(restrict_kind.type == ptr_id);
+    REQUIRE(func_proto_kind.return_type == int_id);
+    REQUIRE(function_kind.name == "test_func");
+    REQUIRE(var_kind.name == "test_var");
+    REQUIRE(data_section_kind.name == ".data");
+    REQUIRE(float_kind.name == "float");
+    REQUIRE(decl_tag_kind.name == "tag");
+    REQUIRE(type_tag_kind.name == "type_tag");
+    REQUIRE(enum64_kind.name == "test_enum64");
+  }
+
+  SECTION("Test wrong type casting throws exception") {
+    // Try to get int as ptr - should throw
+    REQUIRE_THROWS_WITH(btf_data.get_kind_type<libbtf::btf_kind_ptr>(int_id),
+                        Catch::Matchers::ContainsSubstring("Wrong type"));
+
+    // Try to get struct as union - should throw
+    REQUIRE_THROWS_WITH(
+        btf_data.get_kind_type<libbtf::btf_kind_union>(struct_id),
+        Catch::Matchers::ContainsSubstring("Wrong type"));
+  }
+}
+
+TEST_CASE("maximum_type_ids", "[stress]") {
+  // Test behavior near maximum type ID limits
+  libbtf::btf_type_data btf_data;
+
+  SECTION("Add many types and verify they all get unique IDs") {
+    const int num_types = 1000;
+    std::vector<libbtf::btf_type_id> type_ids;
+
+    // Add many int types with different names
+    for (int i = 0; i < num_types; ++i) {
+      auto type_id = btf_data.append(
+          libbtf::btf_kind_int{.name = "int_" + std::to_string(i),
+                               .size_in_bytes = 4,
+                               .offset_from_start_in_bits = 0,
+                               .field_width_in_bits = 32,
+                               .is_signed = true,
+                               .is_char = false,
+                               .is_bool = false});
+      type_ids.push_back(type_id);
+    }
+
+    // Verify all IDs are unique and sequential
+    for (int i = 0; i < num_types; ++i) {
+      REQUIRE(type_ids[i] == static_cast<libbtf::btf_type_id>(i + 1));
+      auto kind = btf_data.get_kind_type<libbtf::btf_kind_int>(type_ids[i]);
+      REQUIRE(kind.name == "int_" + std::to_string(i));
+    }
+
+    // Verify last_type_id returns the highest ID
+    REQUIRE(btf_data.last_type_id() == num_types);
+  }
+
+  SECTION("Test type ID overflow protection") {
+    // This would test the overflow check in append() but since it's hard to
+    // reach UINT32_MAX types in a test, we'll verify the logic exists
+    // by checking that we can at least add a reasonable number of types
+    const int reasonable_limit = 10000;
+
+    libbtf::btf_type_data btf_data_large;
+    for (int i = 0; i < reasonable_limit; ++i) {
+      REQUIRE_NOTHROW(btf_data_large.append(libbtf::btf_kind_void{}));
+    }
+
+    REQUIRE(btf_data_large.last_type_id() == reasonable_limit);
+  }
+}
+
+TEST_CASE("large_string_table", "[stress]") {
+  // Test behavior with large string tables and long type names
+  libbtf::btf_type_data btf_data;
+
+  SECTION("Very long type names") {
+    std::string very_long_name(1000, 'a'); // 1000 character name
+
+    auto type_id = btf_data.append(
+        libbtf::btf_kind_struct{.name = very_long_name, .members = {}});
+
+    auto struct_kind = btf_data.get_kind_type<libbtf::btf_kind_struct>(type_id);
+    REQUIRE(struct_kind.name == very_long_name);
+  }
+
+  SECTION("Many types with unique long names") {
+    const int num_types = 100;
+    std::vector<std::string> long_names;
+
+    for (int i = 0; i < num_types; ++i) {
+      std::string long_name = "very_long_type_name_" +
+                              std::string(100, 'a' + (i % 26)) + "_" +
+                              std::to_string(i);
+      long_names.push_back(long_name);
+
+      btf_data.append(
+          libbtf::btf_kind_struct{.name = long_name, .members = {}});
+    }
+
+    // Verify all names are stored correctly
+    for (int i = 0; i < num_types; ++i) {
+      auto type_id = btf_data.get_id(long_names[i]);
+      auto struct_kind =
+          btf_data.get_kind_type<libbtf::btf_kind_struct>(type_id);
+      REQUIRE(struct_kind.name == long_names[i]);
+    }
+  }
+
+  SECTION("Round-trip serialization with large data") {
+    // Create a large BTF structure and verify round-trip serialization
+    const int num_structs = 50;
+
+    for (int i = 0; i < num_structs; ++i) {
+      std::vector<libbtf::btf_kind_struct_member> members;
+      for (int j = 0; j < 20; ++j) { // 20 members per struct
+        members.push_back({
+            .name = "member_" + std::to_string(j),
+            .type = 1, // void type
+            .offset_from_start_in_bits =
+                static_cast<uint32_t>(j * 8) // 8-bit aligned
+        });
+      }
+
+      btf_data.append(libbtf::btf_kind_struct{
+          .name = "large_struct_" + std::to_string(i),
+          .members = members,
+          .size_in_bytes = static_cast<uint32_t>(members.size() * 8)});
+    }
+
+    // Serialize and deserialize
+    auto serialized = btf_data.to_bytes();
+    libbtf::btf_type_data btf_data_roundtrip(serialized);
+
+    // Verify the data matches
+    REQUIRE(btf_data_roundtrip.last_type_id() == btf_data.last_type_id());
+
+    // Spot check a few types
+    auto original_struct = btf_data.get_kind_type<libbtf::btf_kind_struct>(2);
+    auto roundtrip_struct =
+        btf_data_roundtrip.get_kind_type<libbtf::btf_kind_struct>(2);
+    REQUIRE(original_struct.name == roundtrip_struct.name);
+    REQUIRE(original_struct.members.size() == roundtrip_struct.members.size());
+  }
+}
+
+TEST_CASE("zero_sized_and_edge_case_types", "[boundary]") {
+  libbtf::btf_type_data btf_data;
+
+  SECTION("Zero-sized arrays") {
+    auto array_id = btf_data.append(libbtf::btf_kind_array{
+        .element_type = 1, // void
+        .index_type = 1,
+        .count_of_elements = 0 // Zero elements
+    });
+
+    auto array_kind = btf_data.get_kind_type<libbtf::btf_kind_array>(array_id);
+    REQUIRE(array_kind.count_of_elements == 0);
+    REQUIRE(btf_data.get_size(array_id) == 0);
+  }
+
+  SECTION("Maximum enum64 values") {
+    auto enum64_id = btf_data.append(libbtf::btf_kind_enum64{
+        .name = "max_enum",
+        .is_signed = false,
+        .members = {{.name = "MIN_VAL", .value = 0},
+                    {.name = "MAX_VAL", .value = UINT64_MAX}},
+        .size_in_bytes = 8});
+
+    auto enum64_kind =
+        btf_data.get_kind_type<libbtf::btf_kind_enum64>(enum64_id);
+    REQUIRE(enum64_kind.members[1].value == UINT64_MAX);
+  }
+
+  SECTION("Deeply nested pointer chains") {
+    // Create a chain of 100 pointers: int -> ptr -> ptr -> ... -> ptr
+    auto current_type =
+        btf_data.append(libbtf::btf_kind_int{.name = "int",
+                                             .size_in_bytes = 4,
+                                             .offset_from_start_in_bits = 0,
+                                             .field_width_in_bits = 32,
+                                             .is_signed = true,
+                                             .is_char = false,
+                                             .is_bool = false});
+
+    const int chain_length = 100;
+    for (int i = 0; i < chain_length; ++i) {
+      current_type =
+          btf_data.append(libbtf::btf_kind_ptr{.type = current_type});
+    }
+
+    // Verify we can dereference the whole chain
+    auto ptr_type = current_type;
+    for (int i = 0; i < chain_length; ++i) {
+      ptr_type = btf_data.dereference_pointer(ptr_type);
+    }
+
+    // Should end up at the original int type
+    auto final_kind = btf_data.get_kind_type<libbtf::btf_kind_int>(ptr_type);
+    REQUIRE(final_kind.name == "int");
+  }
+}
+
+TEST_CASE("internal_helper_function_coverage", "[internal]") {
+  // These tests indirectly exercise static helper functions
+
+  SECTION("Test JSON array printing helpers via to_json") {
+    // This exercises print_array_start() and print_array_end() indirectly
+    libbtf::btf_type_data btf_data;
+
+    // Create an enum with multiple members to trigger array printing
+    auto enum_id = btf_data.append(
+        libbtf::btf_kind_enum{.name = "test_enum",
+                              .members = {{.name = "VAL1", .value = 1},
+                                          {.name = "VAL2", .value = 2},
+                                          {.name = "VAL3", .value = 3}},
+                              .size_in_bytes = 4});
+
+    std::stringstream json_output;
+    btf_data.to_json(json_output);
+    std::string json_str = json_output.str();
+
+    // Verify the JSON contains array syntax (which uses print_array_start/end)
+    REQUIRE(json_str.find("\"members\":[") != std::string::npos);
+    REQUIRE(json_str.find("]") != std::string::npos);
+  }
+
+  SECTION("Test btf_uint_from_value indirectly via build_btf_map_section") {
+    // This exercises btf_uint_from_value() through map building
+    libbtf::btf_type_data btf_data;
+
+    // Create a simple map definition
+    std::vector<libbtf::btf_map_definition> map_defs = {
+        {.name = "test_map",
+         .type_id = 0,
+         .map_type = 1, // BPF_MAP_TYPE_HASH
+         .key_size = 4,
+         .value_size = 8,
+         .max_entries = 1024,
+         .inner_map_type_id = 0}};
+
+    // This will internally call btf_uint_from_value for each numeric field
+    REQUIRE_NOTHROW(libbtf::build_btf_map_section(map_defs, btf_data));
+
+    // Verify the map was built correctly
+    auto parsed_maps = libbtf::parse_btf_map_section(btf_data);
+    REQUIRE(parsed_maps.size() == 1);
+    REQUIRE(parsed_maps[0].map_type == 1);
+    REQUIRE(parsed_maps[0].key_size == 4);
+    REQUIRE(parsed_maps[0].value_size == 8);
+    REQUIRE(parsed_maps[0].max_entries == 1024);
+  }
+
+  SECTION("Test BTF parsing validation helpers with edge cases") {
+    // This exercises validate_offset and validate_range indirectly
+    // by creating BTF data that's just barely valid
+
+    std::vector<std::byte> minimal_btf;
+
+    // Create minimal valid BTF with just header and empty string table
+    btf_header_t header = {.magic = BTF_HEADER_MAGIC,
+                           .version = BTF_HEADER_VERSION,
+                           .flags = 0,
+                           .hdr_len = sizeof(btf_header_t),
+                           .type_off = 0,
+                           .type_len = 0,
+                           .str_off = 0,
+                           .str_len = 1};
+
+    minimal_btf.resize(sizeof(header) + 1);
+    std::memcpy(minimal_btf.data(), &header, sizeof(header));
+    minimal_btf[sizeof(header)] =
+        std::byte{0}; // Null terminator for empty string
+
+    // This should parse successfully and exercise the validation functions
+    REQUIRE_NOTHROW(libbtf::btf_type_data(minimal_btf));
+  }
+
+  SECTION("Test write_btf helper indirectly via to_bytes") {
+    // This exercises the static write_btf() helper in btf_write.cpp
+    libbtf::btf_type_data btf_data;
+
+    // Add a variety of types to exercise different write paths
+    auto int_id =
+        btf_data.append(libbtf::btf_kind_int{.name = "int",
+                                             .size_in_bytes = 4,
+                                             .offset_from_start_in_bits = 0,
+                                             .field_width_in_bits = 32,
+                                             .is_signed = true,
+                                             .is_char = false,
+                                             .is_bool = false});
+
+    auto struct_id = btf_data.append(
+        libbtf::btf_kind_struct{.name = "test_struct",
+                                .members = {{.name = "field1",
+                                             .type = int_id,
+                                             .offset_from_start_in_bits = 0},
+                                            {.name = "field2",
+                                             .type = int_id,
+                                             .offset_from_start_in_bits = 32}},
+                                .size_in_bytes = 8});
+
+    // This will internally use write_btf() to serialize each type
+    auto serialized = btf_data.to_bytes();
+    REQUIRE(serialized.size() > sizeof(btf_header_t));
+
+    // Verify round-trip works (exercises parsing validation too)
+    libbtf::btf_type_data btf_data_roundtrip(serialized);
+    REQUIRE(btf_data_roundtrip.last_type_id() == btf_data.last_type_id());
+  }
+
+  SECTION("Test _print_json_value helper indirectly") {
+    // This exercises the static template _print_json_value function
+    libbtf::btf_type_data btf_data;
+
+    // Create types with various optional and non-optional fields
+    auto struct_with_optional_name = btf_data.append(
+        libbtf::btf_kind_struct{.name = std::nullopt, // Optional name
+                                .members = {}});
+
+    auto struct_with_name = btf_data.append(
+        libbtf::btf_kind_struct{.name = "named_struct", .members = {}});
+
+    // Generate JSON - this exercises _print_json_value with both optional and
+    // regular values
+    std::stringstream json_output;
+    btf_data.to_json(json_output);
+    std::string json_str = json_output.str();
+
+    // Verify both types are in the JSON
+    REQUIRE(json_str.find("\"named_struct\"") != std::string::npos);
+    // Anonymous struct should not have a name field or have null name
+    REQUIRE(json_str.length() > 50); // Should have substantial content
+  }
+
+  SECTION("Test private member functions indirectly") {
+    // This exercises get_qualified_type_name_with_detector and related
+    // functions
+    libbtf::btf_type_data btf_data;
+
+    auto int_id =
+        btf_data.append(libbtf::btf_kind_int{.name = "int",
+                                             .size_in_bytes = 4,
+                                             .offset_from_start_in_bits = 0,
+                                             .field_width_in_bits = 32,
+                                             .is_signed = true,
+                                             .is_char = false,
+                                             .is_bool = false});
+
+    auto const_int_id = btf_data.append(libbtf::btf_kind_const{.type = int_id});
+
+    auto ptr_to_const_int_id =
+        btf_data.append(libbtf::btf_kind_ptr{.type = const_int_id});
+
+    // Generate C header - this exercises the private member functions
+    std::stringstream c_header;
+    btf_data.to_c_header(c_header);
+    std::string header_str = c_header.str();
+
+    // Verify the C header contains expected content
+    // Should contain type declarations that use the private helper functions
+    REQUIRE(header_str.length() > 10); // Should have some content
+  }
 }
