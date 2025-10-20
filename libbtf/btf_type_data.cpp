@@ -15,7 +15,7 @@
 
 namespace libbtf {
 
-btf_type_data::btf_type_data(const std::vector<std::byte> &btf_data, bool reject_cycles) {
+btf_type_data::btf_type_data(const std::vector<std::byte> &btf_data) {
   auto visitor = [&, this](btf_type_id id,
                            const std::optional<std::string> &name,
                            const btf_kind &kind) {
@@ -25,15 +25,6 @@ btf_type_data::btf_type_data(const std::vector<std::byte> &btf_data, bool reject
     }
   };
   btf_parse_types(btf_data, visitor);
-  // If reject_cycles is true, validate the type graph.
-  // This will throw an exception if there are cycles.
-  if (reject_cycles) {
-    // Validate that the type graph is valid.
-    for (const auto &[id, kind] : id_to_kind) {
-      std::set<btf_type_id> visited;
-      validate_type_graph(id, visited);
-    }
-  }
 }
 
 btf_type_id btf_type_data::get_id(const std::string &name) const {
@@ -57,22 +48,39 @@ btf_type_id btf_type_data::dereference_pointer(btf_type_id id) const {
 }
 
 uint32_t btf_type_data::get_size(btf_type_id id) const {
+  std::set<btf_type_id> visited;
+  return get_size(id, visited);
+}
+
+uint32_t btf_type_data::get_size(btf_type_id id,
+                                 std::set<btf_type_id> &visited) const {
+  // Check for cycles
+  if (visited.find(id) != visited.end()) {
+    // We're in a cycle - return 0 to avoid infinite recursion
+    return 0;
+  }
+
+  visited.insert(id);
+
   // Compute the effective size of a BTF type.
-  return std::visit(
-      [this, id](auto kind) -> uint32_t {
+  uint32_t result = std::visit(
+      [this, id, &visited](auto kind) -> uint32_t {
         if constexpr (std::is_same_v<decltype(kind), btf_kind_ptr>) {
           return sizeof(void *);
         } else if constexpr (btf_kind_traits<decltype(kind)>::has_type) {
-          return get_size(kind.type);
-        } else if constexpr (btf_kind_traits<decltype(
-                                 kind)>::has_size_in_bytes) {
+          return get_size(kind.type, visited);
+        } else if constexpr (btf_kind_traits<
+                                 decltype(kind)>::has_size_in_bytes) {
           return kind.size_in_bytes;
         } else if constexpr (std::is_same_v<decltype(kind), btf_kind_array>) {
-          return kind.count_of_elements * get_size(kind.element_type);
+          return kind.count_of_elements * get_size(kind.element_type, visited);
         } else
           return 0;
       },
       get_kind(id));
+
+  visited.erase(id);
+  return result;
 }
 
 void btf_type_data::to_json(
@@ -85,8 +93,8 @@ void btf_type_data::validate_type_graph(btf_type_id id,
                                         std::set<btf_type_id> &visited) const {
   auto before = [&](btf_type_id id) -> bool {
     if (visited.find(id) != visited.end()) {
-      throw std::runtime_error("BTF type cycle detected: " +
-                               std::to_string(id));
+      // Cycle detected - return false to stop traversal down this path
+      return false;
     } else {
       visited.insert(id);
     }
@@ -186,7 +194,7 @@ std::vector<btf_type_id> btf_type_data::dependency_order(
   std::set<btf_type_id> filtered_types;
   std::vector<btf_type_id> result;
 
-  // Build list of dependencies.
+  // Build list of dependencies with cycle detection.
   for (const auto &[id, kind] : id_to_kind) {
     // Copy id to a local variable to workaround a bug in Apple's clang.
     // See: https://github.com/llvm/llvm-project/issues/48582
@@ -195,23 +203,36 @@ std::vector<btf_type_id> btf_type_data::dependency_order(
     if (!filter || (*filter)(local_id)) {
       match = true;
     }
+
+    std::set<btf_type_id> visited; // Track cycles during traversal
     auto pre = [&](btf_type_id visit_id) -> bool {
       if (match) {
         filtered_types.insert(visit_id);
       }
       if (visit_id != local_id) {
-        children[local_id].insert(visit_id);
-        parents[visit_id].insert(local_id);
+        // Only add dependency if it doesn't create a self-cycle
+        if (visited.find(visit_id) == visited.end()) {
+          children[local_id].insert(visit_id);
+          parents[visit_id].insert(local_id);
+          visited.insert(visit_id);
+        } else {
+          // Cycle detected - don't add this dependency
+          return false;
+        }
       } else {
         parents.insert({local_id, {}});
         children.insert({local_id, {}});
+        visited.insert(local_id);
       }
       return true;
     };
 
-    visit_depth_first(pre, std::nullopt, local_id);
+    auto post = [&](btf_type_id visit_id) { visited.erase(visit_id); };
+
+    visit_depth_first(pre, post, local_id);
   }
 
+  size_t previous_size = 0;
   while (!parents.empty()) {
     std::vector<btf_type_id> types_to_remove;
     // Find all types with no parents.
@@ -220,6 +241,23 @@ std::vector<btf_type_id> btf_type_data::dependency_order(
         types_to_remove.push_back(id);
       }
     }
+
+    // If we can't make progress (no types with empty parents),
+    // we have cycles. Break them by selecting arbitrary types.
+    if (types_to_remove.empty() && parents.size() == previous_size) {
+      // Pick the first type with the fewest dependencies to break the cycle
+      btf_type_id min_id = parents.begin()->first;
+      size_t min_deps = parents.begin()->second.size();
+      for (const auto &[id, deps] : parents) {
+        if (deps.size() < min_deps) {
+          min_id = id;
+          min_deps = deps.size();
+        }
+      }
+      types_to_remove.push_back(min_id);
+    }
+
+    previous_size = parents.size();
 
     // Remove these parents from all children.
     for (auto id : types_to_remove) {
@@ -306,10 +344,25 @@ std::string btf_type_data::get_type_name(btf_type_id id) const {
 }
 
 std::string btf_type_data::get_qualified_type_name(btf_type_id id) const {
+  std::set<btf_type_id> visited;
+  return get_qualified_type_name(id, visited);
+}
+
+std::string
+btf_type_data::get_qualified_type_name(btf_type_id id,
+                                       std::set<btf_type_id> &visited) const {
+  // Check for cycles
+  if (visited.find(id) != visited.end()) {
+    // We're in a cycle - return a placeholder to avoid infinite recursion
+    return "/* cyclic type " + std::to_string(id) + " */";
+  }
+
+  visited.insert(id);
+
   // Use visit to return the name if the type has it.
   auto kind = get_kind(id);
-  return std::visit(
-      [this](auto kind) -> std::string {
+  std::string result = std::visit(
+      [this, &visited](auto kind) -> std::string {
         // Add possible qualifiers.
         std::string qualifier;
         if constexpr (std::is_same_v<decltype(kind), btf_kind_const>) {
@@ -332,7 +385,8 @@ std::string btf_type_data::get_qualified_type_name(btf_type_id id) const {
         } else if constexpr (btf_kind_traits<decltype(kind)>::has_name) {
           return kind.name + suffix;
         } else if constexpr (btf_kind_traits<decltype(kind)>::has_type) {
-          return qualifier + this->get_qualified_type_name(kind.type) + suffix;
+          return qualifier + this->get_qualified_type_name(kind.type, visited) +
+                 suffix;
         } else if constexpr (std::is_same_v<decltype(kind), btf_kind_void>) {
           return qualifier + "void" + suffix;
         } else {
@@ -340,25 +394,69 @@ std::string btf_type_data::get_qualified_type_name(btf_type_id id) const {
         }
       },
       get_kind(id));
+
+  visited.erase(id);
+  return result;
 }
 
 btf_type_id btf_type_data::get_descendant_type_id(btf_type_id id) const {
+  std::set<btf_type_id> visited;
+  return get_descendant_type_id(id, visited);
+}
+
+btf_type_id
+btf_type_data::get_descendant_type_id(btf_type_id id,
+                                      std::set<btf_type_id> &visited) const {
+  // Check for cycles
+  if (visited.find(id) != visited.end()) {
+    // We're in a cycle - return the current id to break the cycle
+    return id;
+  }
+
+  visited.insert(id);
+
   // Get the type id lowest in the tree.
   auto kind = get_kind(id);
-  return std::visit(
-      [id, this](auto kind) -> btf_type_id {
+  btf_type_id result = std::visit(
+      [id, this, &visited](auto kind) -> btf_type_id {
         if constexpr (btf_kind_traits<decltype(kind)>::has_type) {
-          return this->get_descendant_type_id(kind.type);
+          return this->get_descendant_type_id(kind.type, visited);
         } else {
           return id;
         }
       },
       kind);
+
+  visited.erase(id);
+  return result;
 }
 
 std::string btf_type_data::get_type_declaration(btf_type_id id,
                                                 const std::string &name,
                                                 size_t indent) const {
+  std::set<btf_type_id> visited;
+  return get_type_declaration(id, name, indent, visited);
+}
+
+std::string
+btf_type_data::get_type_declaration(btf_type_id id, const std::string &name,
+                                    size_t indent,
+                                    std::set<btf_type_id> &visited) const {
+  // Check for cycles
+  if (visited.find(id) != visited.end()) {
+    // We're in a cycle - return just the type name if available, or a
+    // placeholder
+    auto type_name = get_type_name(id);
+    if (!type_name.empty()) {
+      return std::string(indent, ' ') + type_name + " " + name;
+    } else {
+      return std::string(indent, ' ') + "/* cyclic type " + std::to_string(id) +
+             " */ " + name;
+    }
+  }
+
+  visited.insert(id);
+
   // Build a string of type qualifiers.
   std::string result = std::string(indent, ' ');
   auto kind = get_kind(id);
@@ -373,90 +471,102 @@ std::string btf_type_data::get_type_declaration(btf_type_id id,
           }
           auto local_type = get_type_name(kind.element_type);
           if (local_type.empty()) {
-            local_type = get_type_declaration(kind.element_type, "", indent);
+            local_type =
+                get_type_declaration(kind.element_type, "", indent, visited);
           }
           result += local_type + " " + local_name + "[" +
                     std::to_string(kind.count_of_elements) + "]";
         } else
-            // If kind is btf_kind_const, add const
-            if constexpr (std::is_same_v<decltype(kind), btf_kind_const>) {
-          result += "const " + get_type_declaration(kind.type, name, indent);
-        } else
+          // If kind is btf_kind_const, add const
+          if constexpr (std::is_same_v<decltype(kind), btf_kind_const>) {
+            result += "const " +
+                      get_type_declaration(kind.type, name, indent, visited);
+          } else
             // If kind is btf_kind_volatile, add volatile
             if constexpr (std::is_same_v<decltype(kind), btf_kind_volatile>) {
-          result += "volatile " + get_type_declaration(kind.type, name, indent);
-        } else
-            // If kind is btf_kind_restrict, add restrict
-            if constexpr (std::is_same_v<decltype(kind), btf_kind_restrict>) {
-          result += "restrict " + get_type_declaration(kind.type, name, indent);
-        } else
-            // If kind is btf_kind_ptr, add *
-            if constexpr (std::is_same_v<decltype(kind), btf_kind_ptr>) {
-          result = get_type_declaration(kind.type, "*" + name, indent);
-        } else if constexpr (std::is_same_v<decltype(kind), btf_kind_struct>) {
-          if (kind.name.has_value()) {
-            result = "struct " + kind.name.value_or("") + " {\n";
-          } else {
-            result = "struct {\n";
-          }
-          for (auto member : kind.members) {
-            std::string type_name = get_type_name(member.type);
-            if (type_name.empty()) {
-              result += get_type_declaration(
-                            member.type, member.name.value_or(""), indent + 2) +
-                        ";\n";
-            } else {
-              result += std::string(indent + 2, ' ') + type_name + " " +
-                        member.name.value_or("") + ";\n";
-            }
-          }
-          result += std::string(indent, ' ') + "}";
-          if (!name.empty()) {
-            result += " " + name;
-          }
-        } else if constexpr (std::is_same_v<decltype(kind), btf_kind_union>) {
-          if (kind.name.has_value()) {
-            result += "union " + kind.name.value_or("") + " {\n";
-          } else {
-            result += "union {\n";
-          }
-          for (auto member : kind.members) {
-            std::string type_name = get_type_name(member.type);
-            if (type_name.empty()) {
-              result += get_type_declaration(
-                            member.type, member.name.value_or(""), indent + 2) +
-                        ";\n";
-            } else {
-              result += std::string(indent + 2, ' ') + type_name + " " +
-                        member.name.value_or("") + ";\n";
-            }
-          }
-          result += std::string(indent, ' ') + "}";
-          if (!name.empty()) {
-            result += " " + name;
-          }
-        } else if constexpr (std::is_same_v<decltype(kind),
-                                            btf_kind_function_prototype>) {
-          result +=
-              get_qualified_type_name(kind.return_type) + " " + name + "(";
-          for (auto param : kind.parameters) {
-            result += get_qualified_type_name(param.type);
-            if (!param.name.empty()) {
-              result += " " + param.name;
-            }
-            result += ", ";
-          }
-          if (kind.parameters.size() > 0) {
-            result.pop_back();
-            result.pop_back();
-          }
-          result += ")";
-        } else if constexpr (!btf_kind_traits<decltype(kind)>::has_type) {
-          result += get_type_name(id) + " " + name;
-        }
+              result += "volatile " +
+                        get_type_declaration(kind.type, name, indent, visited);
+            } else
+              // If kind is btf_kind_restrict, add restrict
+              if constexpr (std::is_same_v<decltype(kind), btf_kind_restrict>) {
+                result += "restrict " + get_type_declaration(kind.type, name,
+                                                             indent, visited);
+              } else
+                // If kind is btf_kind_ptr, add *
+                if constexpr (std::is_same_v<decltype(kind), btf_kind_ptr>) {
+                  result = get_type_declaration(kind.type, "*" + name, indent,
+                                                visited);
+                } else if constexpr (std::is_same_v<decltype(kind),
+                                                    btf_kind_struct>) {
+                  if (kind.name.has_value()) {
+                    result = "struct " + kind.name.value_or("") + " {\n";
+                  } else {
+                    result = "struct {\n";
+                  }
+                  for (auto member : kind.members) {
+                    std::string type_name = get_type_name(member.type);
+                    if (type_name.empty()) {
+                      result += get_type_declaration(member.type,
+                                                     member.name.value_or(""),
+                                                     indent + 2, visited) +
+                                ";\n";
+                    } else {
+                      result += std::string(indent + 2, ' ') + type_name + " " +
+                                member.name.value_or("") + ";\n";
+                    }
+                  }
+                  result += std::string(indent, ' ') + "}";
+                  if (!name.empty()) {
+                    result += " " + name;
+                  }
+                } else if constexpr (std::is_same_v<decltype(kind),
+                                                    btf_kind_union>) {
+                  if (kind.name.has_value()) {
+                    result += "union " + kind.name.value_or("") + " {\n";
+                  } else {
+                    result += "union {\n";
+                  }
+                  for (auto member : kind.members) {
+                    std::string type_name = get_type_name(member.type);
+                    if (type_name.empty()) {
+                      result += get_type_declaration(member.type,
+                                                     member.name.value_or(""),
+                                                     indent + 2, visited) +
+                                ";\n";
+                    } else {
+                      result += std::string(indent + 2, ' ') + type_name + " " +
+                                member.name.value_or("") + ";\n";
+                    }
+                  }
+                  result += std::string(indent, ' ') + "}";
+                  if (!name.empty()) {
+                    result += " " + name;
+                  }
+                } else if constexpr (std::is_same_v<
+                                         decltype(kind),
+                                         btf_kind_function_prototype>) {
+                  result += get_qualified_type_name(kind.return_type) + " " +
+                            name + "(";
+                  for (auto param : kind.parameters) {
+                    result += get_qualified_type_name(param.type);
+                    if (!param.name.empty()) {
+                      result += " " + param.name;
+                    }
+                    result += ", ";
+                  }
+                  if (kind.parameters.size() > 0) {
+                    result.pop_back();
+                    result.pop_back();
+                  }
+                  result += ")";
+                } else if constexpr (!btf_kind_traits<
+                                         decltype(kind)>::has_type) {
+                  result += get_type_name(id) + " " + name;
+                }
       },
       kind);
 
+  visited.erase(id);
   return result;
 }
 } // namespace libbtf

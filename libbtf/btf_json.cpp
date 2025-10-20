@@ -155,8 +155,23 @@ void print_array_end(std::ostream &out) { out << "]"; }
 void btf_type_to_json(const std::map<btf_type_id, btf_kind> &id_to_kind,
                       std::ostream &out,
                       std::optional<std::function<bool(btf_type_id)>> filter) {
+  std::set<btf_type_id> currently_printing; // Track cycles
+
   std::function<void(btf_type_id, const btf_kind &)> print_btf_kind =
       [&](btf_type_id id, const btf_kind &kind) {
+        // Check for cycles
+        if (currently_printing.find(id) != currently_printing.end()) {
+          // We're in a cycle - print just a reference
+          bool first = true;
+          PRINT_JSON_OBJECT_START();
+          PRINT_JSON_FIXED("id", id);
+          PRINT_JSON_FIXED("kind_type", "reference");
+          PRINT_JSON_OBJECT_END();
+          return;
+        }
+
+        currently_printing.insert(id);
+
         bool first = true;
         PRINT_JSON_OBJECT_START();
         PRINT_JSON_FIXED("id", id);
@@ -218,6 +233,8 @@ void btf_type_to_json(const std::map<btf_type_id, btf_kind> &id_to_kind,
             },
             kind);
         PRINT_JSON_OBJECT_END();
+
+        currently_printing.erase(id);
       };
 
   // Determine the list of types that are not referenced by other types. These

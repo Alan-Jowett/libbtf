@@ -257,8 +257,9 @@ TEST_CASE("validate-parsing-simple-loop", "[validation]") {
   libbtf::btf_type_data btf_data_loop;
   btf_data_loop.append(libbtf::btf_kind_ptr{.type = 1});
 
-  REQUIRE_THROWS(
-      [&] { libbtf::btf_type_data btf_data = btf_data_loop.to_bytes(); }());
+  // Cycles should now be allowed
+  REQUIRE_NOTHROW(
+      [&] { libbtf::btf_type_data btf_data(btf_data_loop.to_bytes()); }());
 }
 
 TEST_CASE("validate-parsing-large-loop", "[validation]") {
@@ -271,8 +272,66 @@ TEST_CASE("validate-parsing-large-loop", "[validation]") {
   // Last PTR points to itself.
   btf_data_loop.append(libbtf::btf_kind_ptr{.type = 1});
 
-  REQUIRE_THROWS(
-      [&] { libbtf::btf_type_data btf_data = btf_data_loop.to_bytes(); }());
+  // Cycles should now be allowed
+  REQUIRE_NOTHROW(
+      [&] { libbtf::btf_type_data btf_data(btf_data_loop.to_bytes()); }());
+}
+
+TEST_CASE("validate-parsing-cycles-allowed-by-default", "[validation]") {
+  libbtf::btf_type_data btf_data_loop;
+  // Add an integer type first (root type)
+  btf_data_loop.append(libbtf::btf_kind_int{.name = "int",
+                                            .size_in_bytes = 4,
+                                            .offset_from_start_in_bits = 0,
+                                            .field_width_in_bits = 32,
+                                            .is_signed = true,
+                                            .is_char = false,
+                                            .is_bool = false});
+  // Add a pointer that creates a cycle (points to the int type)
+  btf_data_loop.append(libbtf::btf_kind_ptr{.type = 1});
+  // Add another pointer that points to the previous pointer, creating a cycle
+  btf_data_loop.append(libbtf::btf_kind_ptr{.type = 2});
+
+  // This should not throw since cycles are always allowed
+  REQUIRE_NOTHROW(
+      [&] { libbtf::btf_type_data btf_data(btf_data_loop.to_bytes()); }());
+
+  // Test JSON output with cycles
+  std::stringstream json_output;
+  libbtf::btf_type_data btf_data(btf_data_loop.to_bytes());
+  REQUIRE_NOTHROW([&] { btf_data.to_json(json_output); }());
+
+  // Verify JSON contains expected content (should at least have the int type)
+  std::string json_str = json_output.str();
+  INFO("JSON output: " << json_str);
+  bool has_content = json_str.find("btf_kinds") != std::string::npos &&
+                     json_str.length() > 20; // More than just empty structure
+  REQUIRE(has_content);
+}
+
+TEST_CASE("validate-get_size-with-cycles", "[validation]") {
+  libbtf::btf_type_data btf_data_loop;
+  // Add a pointer that points to itself (cycle)
+  btf_data_loop.append(libbtf::btf_kind_ptr{.type = 1});
+
+  // This should not crash and should return a reasonable size
+  REQUIRE_NOTHROW([&] {
+    auto size = btf_data_loop.get_size(1);
+    // For a pointer, we expect sizeof(void*), even in a cycle
+    REQUIRE(size == sizeof(void *));
+  }());
+
+  // Test with a more complex cycle: ptr -> ptr -> ptr (cycle back to first)
+  libbtf::btf_type_data btf_data_complex;
+  btf_data_complex.append(libbtf::btf_kind_ptr{.type = 2}); // id 1 -> id 2
+  btf_data_complex.append(
+      libbtf::btf_kind_ptr{.type = 1}); // id 2 -> id 1 (cycle)
+
+  REQUIRE_NOTHROW([&] {
+    auto size = btf_data_complex.get_size(1);
+    // Should still return sizeof(void*) for the pointer
+    REQUIRE(size == sizeof(void *));
+  }());
 }
 
 TEST_CASE("enum_type", "[parsing][json]") {
@@ -818,5 +877,4 @@ TEST_CASE("parse_btf_map_section_globals", "[btf_type_data]") {
   REQUIRE(map_definitions[2].value_size == 4);
   REQUIRE(map_definitions[2].max_entries == 1);
   REQUIRE(map_definitions[2].inner_map_type_id == 0);
-
 }

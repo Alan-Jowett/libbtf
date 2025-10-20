@@ -13,7 +13,7 @@ public:
       option_handler;
   options(std::ostream &out = std::cout) : out(out) {
     add(
-        "-h", 0, [this](auto iter) { this->print_help(); },
+        "-h", 0, [this](auto) { this->print_help(); },
         "Print this help message");
   }
   ~options() = default;

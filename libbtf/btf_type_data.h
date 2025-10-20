@@ -42,12 +42,9 @@ public:
    * @brief Construct a new btf type data object from a vector of bytes.
    *
    * @param[in] btf_data The BTF data.
-   * @param[in] reject_cycles If true, reject cycles in the type graph.
-   * @throws std::runtime_error If the BTF data is invalid or if there are
-   * cycles in the type graph.
+   * @throws std::runtime_error If the BTF data is invalid.
    */
-  btf_type_data(const std::vector<std::byte> &btf_data,
-                bool reject_cycles = true);
+  btf_type_data(const std::vector<std::byte> &btf_data);
 
   /**
    * @brief Destroy the btf type data object
@@ -77,6 +74,7 @@ public:
 
   btf_type_id dereference_pointer(btf_type_id id) const;
   uint32_t get_size(btf_type_id id) const;
+  uint32_t get_size(btf_type_id id, std::set<btf_type_id> &visited) const;
   void
   to_json(std::ostream &out,
           std::optional<std::function<bool(btf_type_id)>> = std::nullopt) const;
@@ -112,9 +110,16 @@ private:
 
   std::string get_type_name(btf_type_id id) const;
   std::string get_qualified_type_name(btf_type_id id) const;
+  std::string get_qualified_type_name(btf_type_id id,
+                                      std::set<btf_type_id> &visited) const;
   btf_type_id get_descendant_type_id(btf_type_id id) const;
+  btf_type_id get_descendant_type_id(btf_type_id id,
+                                     std::set<btf_type_id> &visited) const;
   std::string get_type_declaration(btf_type_id id, const std::string &name,
                                    size_t indent) const;
+  std::string get_type_declaration(btf_type_id id, const std::string &name,
+                                   size_t indent,
+                                   std::set<btf_type_id> &visited) const;
   std::map<btf_type_id, btf_kind> id_to_kind;
   std::map<std::string, btf_type_id> name_to_id;
 };
