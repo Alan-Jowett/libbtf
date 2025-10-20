@@ -1314,7 +1314,7 @@ TEST_CASE("validate-btf_parse_types-with-cycles", "[validation]") {
     int type_count = 0;
     auto visitor = [&type_count](libbtf::btf_type_id id,
                                  const std::optional<std::string> &name,
-                                 const libbtf::btf_kind &kind) {
+                                 const libbtf::btf_kind &) {
       type_count++;
       INFO("Parsed type " << id << " with name "
                           << (name ? *name : "<no name>"));
