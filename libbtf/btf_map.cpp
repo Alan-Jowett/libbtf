@@ -137,9 +137,12 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
   // Required fields.
   map_definition.type_id = map_type_id;
   map_definition.map_type = _value_from_BTF__uint(btf_types, type);
-  map_definition.max_entries = _value_from_BTF__uint(btf_types, max_entries);
 
   // Optional fields.
+  if (max_entries) {
+    map_definition.max_entries = _value_from_BTF__uint(btf_types, max_entries);
+  }
+
   if (key) {
     size_t key_size_in_bytes = btf_types.get_size(key);
     if (key_size > UINT32_MAX) {
