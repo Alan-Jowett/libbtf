@@ -40,14 +40,11 @@ static btf_type_id _unwrap_type(const btf_type_data &btf_types,
   libbtf::cycle_detector detector;
 
   for (;;) {
-    // Check for cycles using the detector
-    if (detector.would_create_cycle(type_id)) {
+    // Check for cycles and mark as visited atomically
+    if (!detector.mark_visited(type_id)) {
       // Cycle detected - return current type_id to break the cycle
       return type_id;
     }
-
-    // Mark as visited (no need to unmark since we don't recurse)
-    detector.mark_visited(type_id);
 
     switch (btf_types.get_kind_index(type_id)) {
     case BTF_KIND_TYPEDEF:

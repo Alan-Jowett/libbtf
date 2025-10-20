@@ -4,6 +4,7 @@
 #include "btf_json.h"
 
 #include "btf_c_type.h"
+#include "cycle_detector.h"
 
 #include <functional>
 #include <set>
@@ -155,12 +156,16 @@ void print_array_end(std::ostream &out) { out << "]"; }
 void btf_type_to_json(const std::map<btf_type_id, btf_kind> &id_to_kind,
                       std::ostream &out,
                       std::optional<std::function<bool(btf_type_id)>> filter) {
-  std::set<btf_type_id> currently_printing; // Track cycles
+  cycle_detector detector; // Track cycles using cycle_detector
+  using scoped_visit = libbtf::scoped_visit;
 
   std::function<void(btf_type_id, const btf_kind &)> print_btf_kind =
       [&](btf_type_id id, const btf_kind &kind) {
-        // Check for cycles
-        if (currently_printing.find(id) != currently_printing.end()) {
+        // Use scoped_visit for automatic cycle detection and cleanup
+        scoped_visit visit(detector, id, std::nothrow);
+
+        // Check for cycles using scoped_visit
+        if (!visit.is_marked()) {
           // We're in a cycle - print just a reference
           bool first = true;
           PRINT_JSON_OBJECT_START();
@@ -170,7 +175,8 @@ void btf_type_to_json(const std::map<btf_type_id, btf_kind> &id_to_kind,
           return;
         }
 
-        currently_printing.insert(id);
+        // No cycle detected, proceed with normal printing
+        // The scoped_visit will automatically unmark when it goes out of scope
 
         bool first = true;
         PRINT_JSON_OBJECT_START();
@@ -234,7 +240,7 @@ void btf_type_to_json(const std::map<btf_type_id, btf_kind> &id_to_kind,
             kind);
         PRINT_JSON_OBJECT_END();
 
-        currently_printing.erase(id);
+        // scoped_visit automatically unmarks when it goes out of scope
       };
 
   // Determine the list of types that are not referenced by other types. These
