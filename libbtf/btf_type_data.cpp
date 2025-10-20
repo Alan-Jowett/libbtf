@@ -125,52 +125,6 @@ void btf_type_data::update_name_to_id(btf_type_id id) {
   }
 }
 
-void btf_type_data::visit_depth_first(
-    std::optional<std::function<bool(btf_type_id)>> before,
-    std::optional<std::function<void(btf_type_id)>> after,
-    btf_type_id id) const {
-  if (before) {
-    if (!(*before)(id)) {
-      return;
-    }
-  }
-
-  std::visit(
-      [&, this](auto kind) {
-        if constexpr (btf_kind_traits<decltype(kind)>::has_type) {
-          visit_depth_first(before, after, kind.type);
-        }
-        if constexpr (btf_kind_traits<decltype(kind)>::has_index_type) {
-          visit_depth_first(before, after, kind.index_type);
-        }
-        if constexpr (btf_kind_traits<decltype(kind)>::has_element_type) {
-          visit_depth_first(before, after, kind.element_type);
-        }
-        if constexpr (btf_kind_traits<decltype(kind)>::has_members) {
-          for (auto member : kind.members) {
-            if constexpr (btf_kind_traits<decltype(member)>::has_type) {
-              visit_depth_first(before, after, member.type);
-            }
-          }
-        }
-        if constexpr (btf_kind_traits<decltype(kind)>::has_return_type) {
-          visit_depth_first(before, after, kind.return_type);
-        }
-        if constexpr (btf_kind_traits<decltype(kind)>::has_parameters) {
-          for (auto param : kind.parameters) {
-            if constexpr (btf_kind_traits<decltype(param)>::has_type) {
-              visit_depth_first(before, after, param.type);
-            }
-          }
-        }
-      },
-      get_kind(id));
-
-  if (after) {
-    (*after)(id);
-  }
-}
-
 std::vector<btf_type_id> btf_type_data::dependency_order(
     std::optional<std::function<bool(btf_type_id)>> filter) const {
   std::map<btf_type_id, std::set<btf_type_id>> children;
@@ -179,8 +133,7 @@ std::vector<btf_type_id> btf_type_data::dependency_order(
   std::vector<btf_type_id> result;
 
   // Build list of dependencies manually to avoid infinite recursion with
-  // cycles. Previous implementation used visit_depth_first which could infinite
-  // loop on cyclic types. This approach directly extracts immediate
+  // cycles. This approach directly extracts immediate
   // dependencies without recursive traversal.
   for (const auto &[id, kind] : id_to_kind) {
     // Copy id to a local variable to workaround a bug in Apple's clang.

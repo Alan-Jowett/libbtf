@@ -87,10 +87,6 @@ public:
   void replace(btf_type_id id, const btf_kind &kind);
   btf_type_id last_type_id() const { return id_to_kind.rbegin()->first; }
 
-  void visit_depth_first(std::optional<std::function<bool(btf_type_id)>> before,
-                         std::optional<std::function<void(btf_type_id)>> after,
-                         btf_type_id id) const;
-
   void to_c_header(std::ostream &out,
                    std::optional<std::function<bool(btf_type_id)>> filter =
                        std::nullopt) const;

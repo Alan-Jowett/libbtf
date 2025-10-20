@@ -1054,33 +1054,6 @@ TEST_CASE("validate-to_c_header-function-cycles", "[validation]") {
   });
 }
 
-TEST_CASE("validate-visit_depth_first-with-cycles", "[validation]") {
-  run_with_timeout([&] {
-    libbtf::btf_type_data btf_data;
-
-    // Create a cycle
-    btf_data.append(libbtf::btf_kind_ptr{.type = 2}); // id 1 -> id 2
-    btf_data.append(libbtf::btf_kind_ptr{.type = 1}); // id 2 -> id 1 (cycle)
-
-    // This should not crash with cycles
-    int visit_count = 0;
-    auto before_func = [&visit_count](libbtf::btf_type_id id) -> bool {
-      visit_count++;
-      INFO("Visiting type " << id);
-      return visit_count < 10; // Prevent infinite visits
-    };
-    auto after_func = [](libbtf::btf_type_id) {};
-
-    REQUIRE_NOTHROW(
-        [&] { btf_data.visit_depth_first(before_func, after_func, 1); }());
-
-    // Should have visited some types but not gone into infinite loop
-    REQUIRE(visit_count > 0);
-    REQUIRE(visit_count <= 10); // Allow up to 10 visits (cycle detection might
-                                // visit each node a few times)
-  });
-}
-
 TEST_CASE("validate-dereference_pointer-with-cycles", "[validation]") {
   run_with_timeout([&] {
     libbtf::btf_type_data btf_data;
