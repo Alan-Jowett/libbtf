@@ -935,36 +935,41 @@ TEST_CASE("validate-dependency_order-robustness", "[validation]") {
   });
 }
 
-TEST_CASE("validate-dependency_order-with-cycles",
-          "[validation][.][known-bug]") {
-  // This test documents a known bug: dependency_order hangs on cycles
-  // It's tagged with [.] to skip by default and [known-bug] for identification
-  // The timeout mechanism prevents infinite hanging and allows us to identify
-  // the issue
-  //
-  // To run this test: .\build\test\Debug\tests.exe "[known-bug]"
-  // Expected result: timeout after 3 seconds with exit code 1
-  run_with_timeout(
-      [&] {
-        libbtf::btf_type_data btf_data;
+TEST_CASE("validate-dependency_order-with-cycles", "[validation]") {
+  // Test that dependency_order can handle cycles without hanging
+  // This test verifies the fix for the infinite loop bug in dependency_order()
+  run_with_timeout([&] {
+    libbtf::btf_type_data btf_data;
 
-        // Create a cycle that dependency_order currently cannot handle
-        // This test documents that dependency_order has a bug with cycles
-        btf_data.append(libbtf::btf_kind_typedef{.name = "type_a",
-                                                 .type = 2}); // id 1 -> id 2
-        btf_data.append(libbtf::btf_kind_typedef{
-            .name = "type_b", .type = 1}); // id 2 -> id 1 (cycle)
+    // Create a simple cycle that previously caused infinite loops
+    btf_data.append(
+        libbtf::btf_kind_typedef{.name = "type_a", .type = 2}); // id 1 -> id 2
+    btf_data.append(libbtf::btf_kind_typedef{
+        .name = "type_b", .type = 1}); // id 2 -> id 1 (cycle)
 
-        // This currently hangs due to infinite loop in dependency_order
-        // TODO: Fix dependency_order to handle cycles properly
-        auto deps = btf_data.dependency_order();
-        INFO("Dependencies count with cycles: " << deps.size());
+    // This should not hang and should return a reasonable dependency order
+    REQUIRE_NOTHROW([&] {
+      auto deps = btf_data.dependency_order();
+      INFO("Dependencies count with cycles: " << deps.size());
 
-        // If we reach here, dependency_order was fixed to handle cycles
-        REQUIRE(deps.size() >= 0);
-      },
-      std::chrono::seconds(
-          3)); // Use shorter timeout since we expect this to fail
+      // The function should complete without infinite loops
+      // The exact size may vary due to cycle-breaking algorithm
+      REQUIRE(deps.size() >= 2);
+      REQUIRE(deps.size() <= 10); // Reasonable upper bound
+
+      // Verify both cyclic types are present in the result
+      bool found_type_a = false;
+      bool found_type_b = false;
+      for (auto id : deps) {
+        if (id == 1)
+          found_type_a = true;
+        if (id == 2)
+          found_type_b = true;
+      }
+      REQUIRE(found_type_a);
+      REQUIRE(found_type_b);
+    }());
+  });
 }
 
 TEST_CASE("validate-to_c_header-with-cycles", "[validation]") {

@@ -194,7 +194,10 @@ std::vector<btf_type_id> btf_type_data::dependency_order(
   std::set<btf_type_id> filtered_types;
   std::vector<btf_type_id> result;
 
-  // Build list of dependencies with cycle detection.
+  // Build list of dependencies manually to avoid infinite recursion with
+  // cycles. Previous implementation used visit_depth_first which could infinite
+  // loop on cyclic types. This approach directly extracts immediate
+  // dependencies without recursive traversal.
   for (const auto &[id, kind] : id_to_kind) {
     // Copy id to a local variable to workaround a bug in Apple's clang.
     // See: https://github.com/llvm/llvm-project/issues/48582
@@ -202,39 +205,110 @@ std::vector<btf_type_id> btf_type_data::dependency_order(
     bool match = false;
     if (!filter || (*filter)(local_id)) {
       match = true;
+      filtered_types.insert(local_id);
     }
 
-    std::set<btf_type_id> visited; // Track cycles during traversal
-    auto pre = [&](btf_type_id visit_id) -> bool {
-      if (match) {
-        filtered_types.insert(visit_id);
-      }
-      if (visit_id != local_id) {
-        // Only add dependency if it doesn't create a self-cycle
-        if (visited.find(visit_id) == visited.end()) {
-          children[local_id].insert(visit_id);
-          parents[visit_id].insert(local_id);
-          visited.insert(visit_id);
-        } else {
-          // Cycle detected - don't add this dependency
-          return false;
-        }
-      } else {
-        parents.insert({local_id, {}});
-        children.insert({local_id, {}});
-        visited.insert(local_id);
-      }
-      return true;
-    };
+    // Initialize entries for this type
+    if (parents.find(local_id) == parents.end()) {
+      parents[local_id] = std::set<btf_type_id>();
+    }
+    if (children.find(local_id) == children.end()) {
+      children[local_id] = std::set<btf_type_id>();
+    }
 
-    auto post = [&](btf_type_id visit_id) { visited.erase(visit_id); };
-
-    visit_depth_first(pre, post, local_id);
+    // Directly extract dependencies from the kind without recursive traversal
+    std::visit(
+        [&](auto k) {
+          if constexpr (btf_kind_traits<decltype(k)>::has_type) {
+            btf_type_id dep_id = k.type;
+            if (dep_id != local_id &&
+                id_to_kind.find(dep_id) != id_to_kind.end()) {
+              children[local_id].insert(dep_id);
+              if (parents.find(dep_id) == parents.end()) {
+                parents[dep_id] = std::set<btf_type_id>();
+              }
+              parents[dep_id].insert(local_id);
+            }
+          }
+          if constexpr (btf_kind_traits<decltype(k)>::has_index_type) {
+            btf_type_id dep_id = k.index_type;
+            if (dep_id != local_id &&
+                id_to_kind.find(dep_id) != id_to_kind.end()) {
+              children[local_id].insert(dep_id);
+              if (parents.find(dep_id) == parents.end()) {
+                parents[dep_id] = std::set<btf_type_id>();
+              }
+              parents[dep_id].insert(local_id);
+            }
+          }
+          if constexpr (btf_kind_traits<decltype(k)>::has_element_type) {
+            btf_type_id dep_id = k.element_type;
+            if (dep_id != local_id &&
+                id_to_kind.find(dep_id) != id_to_kind.end()) {
+              children[local_id].insert(dep_id);
+              if (parents.find(dep_id) == parents.end()) {
+                parents[dep_id] = std::set<btf_type_id>();
+              }
+              parents[dep_id].insert(local_id);
+            }
+          }
+          if constexpr (btf_kind_traits<decltype(k)>::has_return_type) {
+            btf_type_id dep_id = k.return_type;
+            if (dep_id != local_id &&
+                id_to_kind.find(dep_id) != id_to_kind.end()) {
+              children[local_id].insert(dep_id);
+              if (parents.find(dep_id) == parents.end()) {
+                parents[dep_id] = std::set<btf_type_id>();
+              }
+              parents[dep_id].insert(local_id);
+            }
+          }
+          if constexpr (btf_kind_traits<decltype(k)>::has_members) {
+            for (auto member : k.members) {
+              if constexpr (btf_kind_traits<decltype(member)>::has_type) {
+                btf_type_id dep_id = member.type;
+                if (dep_id != local_id &&
+                    id_to_kind.find(dep_id) != id_to_kind.end()) {
+                  children[local_id].insert(dep_id);
+                  if (parents.find(dep_id) == parents.end()) {
+                    parents[dep_id] = std::set<btf_type_id>();
+                  }
+                  parents[dep_id].insert(local_id);
+                }
+              }
+            }
+          }
+          if constexpr (btf_kind_traits<decltype(k)>::has_parameters) {
+            for (auto param : k.parameters) {
+              if constexpr (btf_kind_traits<decltype(param)>::has_type) {
+                btf_type_id dep_id = param.type;
+                if (dep_id != local_id &&
+                    id_to_kind.find(dep_id) != id_to_kind.end()) {
+                  children[local_id].insert(dep_id);
+                  if (parents.find(dep_id) == parents.end()) {
+                    parents[dep_id] = std::set<btf_type_id>();
+                  }
+                  parents[dep_id].insert(local_id);
+                }
+              }
+            }
+          }
+        },
+        kind);
   }
 
+  // Perform topological sort with cycle breaking
+  // Add safety limit to prevent infinite loops in case of bugs in
+  // cycle-breaking logic
   size_t previous_size = 0;
-  while (!parents.empty()) {
+  size_t iteration_count = 0;
+  const size_t max_iterations =
+      id_to_kind.size() * 3; // Safety limit to prevent infinite loops in cycles
+
+  while (!parents.empty() && iteration_count < max_iterations) {
+    iteration_count++;
     std::vector<btf_type_id> types_to_remove;
+
     // Find all types with no parents.
     for (auto &[id, child_set] : parents) {
       if (child_set.empty()) {
@@ -244,7 +318,7 @@ std::vector<btf_type_id> btf_type_data::dependency_order(
 
     // If we can't make progress (no types with empty parents),
     // we have cycles. Break them by selecting arbitrary types.
-    if (types_to_remove.empty() && parents.size() == previous_size) {
+    if (types_to_remove.empty()) {
       // Pick the first type with the fewest dependencies to break the cycle
       btf_type_id min_id = parents.begin()->first;
       size_t min_deps = parents.begin()->second.size();
@@ -255,6 +329,11 @@ std::vector<btf_type_id> btf_type_data::dependency_order(
         }
       }
       types_to_remove.push_back(min_id);
+    }
+
+    if (types_to_remove.empty()) {
+      // Safety: force progress if we're still stuck
+      types_to_remove.push_back(parents.begin()->first);
     }
 
     previous_size = parents.size();
