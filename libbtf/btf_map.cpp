@@ -8,6 +8,7 @@
 #include "btf_parse.h"
 #include "btf_type_data.h"
 #include "btf_write.h"
+#include "cycle_detector.h"
 
 #include <algorithm>
 #include <stdexcept>
@@ -36,7 +37,15 @@ static uint32_t _value_from_BTF__uint(const btf_type_data &btf_types,
  */
 static btf_type_id _unwrap_type(const btf_type_data &btf_types,
                                 btf_type_id type_id) {
+  libbtf::cycle_detector detector;
+
   for (;;) {
+    // Check for cycles and mark as visited atomically
+    if (!detector.mark_visited(type_id)) {
+      // Cycle detected - return current type_id to break the cycle
+      return type_id;
+    }
+
     switch (btf_types.get_kind_index(type_id)) {
     case BTF_KIND_TYPEDEF:
       type_id = btf_types.get_kind_type<btf_kind_typedef>(type_id).type;
@@ -46,6 +55,9 @@ static btf_type_id _unwrap_type(const btf_type_data &btf_types,
       break;
     case BTF_KIND_VOLATILE:
       type_id = btf_types.get_kind_type<btf_kind_volatile>(type_id).type;
+      break;
+    case BTF_KIND_RESTRICT:
+      type_id = btf_types.get_kind_type<btf_kind_restrict>(type_id).type;
       break;
     default:
       return type_id;
@@ -145,7 +157,7 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
 
   if (key) {
     size_t key_size_in_bytes = btf_types.get_size(key);
-    if (key_size > UINT32_MAX) {
+    if (key_size_in_bytes > UINT32_MAX) {
       throw std::runtime_error("key size too large");
     }
     map_definition.key_size = static_cast<uint32_t>(key_size_in_bytes);
@@ -155,7 +167,7 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
 
   if (value) {
     size_t value_size_in_bytes = btf_types.get_size(value);
-    if (value_size > UINT32_MAX) {
+    if (value_size_in_bytes > UINT32_MAX) {
       throw std::runtime_error("value size too large");
     }
     map_definition.value_size = static_cast<uint32_t>(value_size_in_bytes);
@@ -200,8 +212,8 @@ parse_btf_map_section(const btf_type_data &btf_data) {
     auto maps_section =
         btf_data.get_kind_type<btf_kind_data_section>(btf_data.get_id(".maps"));
 
-    // Helper function to add a map definition to the map definitions and add the
-    // inner map type ID to the list of inner map type IDs if it is present.
+    // Helper function to add a map definition to the map definitions and add
+    // the inner map type ID to the list of inner map type IDs if it is present.
     auto handle_map_type_id = [&](const std::string &name,
                                   btf_type_id map_type_id) {
       auto map_definition =
@@ -220,10 +232,11 @@ parse_btf_map_section(const btf_type_data &btf_data) {
       handle_map_type_id(map_var.name, map_var.type);
     }
 
-    // Recursively add all inner maps. Assume that there are at most two levels of
-    // inner maps. This is the current limit imposed by the BPF verifier on Linux.
+    // Recursively add all inner maps. Assume that there are at most two levels
+    // of inner maps. This is the current limit imposed by the BPF verifier on
+    // Linux.
     for (size_t inner_map_recursion_level = 0; inner_map_recursion_level < 2;
-        inner_map_recursion_level++) {
+         inner_map_recursion_level++) {
       // Add all maps that are not in the .maps data section.
       for (const auto &map_type_id : inner_map_type_ids) {
         // Skip if the map is already present.
@@ -246,7 +259,8 @@ parse_btf_map_section(const btf_type_data &btf_data) {
     map_definition.name = data_section.name;
     map_definition.type_id = data_section_id;
     map_definition.key_size = sizeof(uint32_t);
-    map_definition.value_size = data_section.members.back().offset + data_section.members.back().size;
+    map_definition.value_size =
+        data_section.members.back().offset + data_section.members.back().size;
     map_definition.max_entries = 1;
     map_definitions.insert({map_definition.type_id, map_definition});
   };

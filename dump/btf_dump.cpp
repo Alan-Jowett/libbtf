@@ -16,6 +16,8 @@
 #include "elfio/elfio.hpp"
 #pragma warning(pop)
 
+#include <cstdlib>
+#include <fstream>
 #include <functional>
 #include <map>
 #include <optional>
@@ -36,18 +38,14 @@ int main(int argc, char **argv) {
     bool pretty_print_json = false;
 
     options opts;
-    opts.add(
-        "-i", 2, [&](auto iter) { input_file = *iter; }, "Input file");
-    opts.add(
-        "-o", 2, [&](auto iter) { output_file = *iter; }, "Output file");
+    opts.add("-i", 2, [&](auto iter) { input_file = *iter; }, "Input file");
+    opts.add("-o", 2, [&](auto iter) { output_file = *iter; }, "Output file");
     opts.add(
         "-j", 2, [&](auto iter) { json_output_file = *iter; },
         "JSON output file");
+    opts.add("-r", 2, [&](auto iter) { root_type = *iter; }, "Root type");
     opts.add(
-        "-r", 2, [&](auto iter) { root_type = *iter; }, "Root type");
-    opts.add(
-        "-p", 1, [&](auto iter) { pretty_print_json = true; },
-        "Pretty print JSON");
+        "-p", 1, [&](auto) { pretty_print_json = true; }, "Pretty print JSON");
     opts.add(
         "-t", 2, [&](auto iter) { c_output_file = *iter; }, "C output file");
 

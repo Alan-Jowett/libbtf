@@ -19,7 +19,7 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(elfio)
 
-add_executable(tests test.cpp)
+add_executable(tests test.cpp test_cycle_detector.cpp)
 
 # Add the include directory for the library
 include_directories(${elfio_SOURCE_DIR})
