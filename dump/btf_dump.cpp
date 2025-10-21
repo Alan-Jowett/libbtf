@@ -16,6 +16,8 @@
 #include "elfio/elfio.hpp"
 #pragma warning(pop)
 
+#include <cstdlib>
+#include <fstream>
 #include <functional>
 #include <map>
 #include <optional>

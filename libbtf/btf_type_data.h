@@ -4,7 +4,9 @@
 #pragma once
 #include "btf.h"
 
+#include <cstddef>
 #include <functional>
+#include <iosfwd>
 #include <map>
 #include <optional>
 #include <set>

@@ -239,6 +239,12 @@ std::vector<btf_type_id> btf_type_data::dependency_order(
   // cycle-breaking logic
   size_t previous_size = 0;
   size_t iteration_count = 0;
+  // The multiplier '3' is chosen as a conservative upper bound for the number
+  // of iterations required to remove all nodes, even in the presence of cycles.
+  // In the worst-case scenario, each iteration removes at least one node, and
+  // the factor of 3 ensures that the loop will terminate even if cycles require
+  // multiple passes to break. Adjust if future analysis shows a different bound
+  // is needed.
   const size_t max_iterations =
       id_to_kind.size() * 3; // Safety limit to prevent infinite loops in cycles
 
@@ -323,7 +329,7 @@ void btf_type_data::to_c_header(
           } else if constexpr (std::is_same_v<decltype(kind), btf_kind_union>) {
             out << get_type_declaration(id, "", indent) << ";\n\n";
           } else if constexpr (std::is_same_v<decltype(kind), btf_kind_fwd>) {
-            out << (kind.is_struct ? "union" : "struct ") << kind.name
+            out << (kind.is_struct ? "union " : "struct ") << kind.name
                 << ";\n\n";
           } else if constexpr (std::is_same_v<decltype(kind), btf_kind_var>) {
             out << get_type_declaration(kind.type, kind.name, indent)

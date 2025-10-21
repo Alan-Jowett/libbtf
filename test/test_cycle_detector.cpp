@@ -143,8 +143,8 @@ TEST_CASE("Real-world usage patterns", "[cycle_detector][integration]") {
 
   SECTION("Simulated recursive type size calculation") {
     // Simulate calculating size of recursive types
-    std::function<int(int, cycle_detector &)> calc_size =
-        [&](int type_id, cycle_detector &det) -> int {
+    std::function<int(int, cycle_detector &)> calc_size;
+    calc_size = [&](int type_id, cycle_detector &det) -> int {
       return det.with_cycle_detection<int>(
           type_id,
           [&]() -> int {
@@ -179,8 +179,8 @@ TEST_CASE("Real-world usage patterns", "[cycle_detector][integration]") {
         {2, 3}  // MyStruct -> ptr_to_2 (creates cycle)
     };
 
-    std::function<std::string(int, cycle_detector &)> get_name =
-        [&](int type_id, cycle_detector &det) -> std::string {
+    std::function<std::string(int, cycle_detector &)> get_name;
+    get_name = [&](int type_id, cycle_detector &det) -> std::string {
       scoped_visit visit(det, type_id, std::nothrow);
       if (!visit.is_marked()) {
         return "cyclic_type_" + std::to_string(type_id);

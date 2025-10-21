@@ -92,8 +92,15 @@ public:
     }
 
     visited_.insert(id);
-
-    T result = func();
+    T result;
+    try {
+      result = func();
+    } catch (...) {
+      if (backtrack) {
+        visited_.erase(id);
+      }
+      throw;
+    }
 
     if (backtrack) {
       visited_.erase(id);

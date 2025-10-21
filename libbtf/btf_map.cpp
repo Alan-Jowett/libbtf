@@ -157,7 +157,7 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
 
   if (key) {
     size_t key_size_in_bytes = btf_types.get_size(key);
-    if (key_size > UINT32_MAX) {
+    if (key_size_in_bytes > UINT32_MAX) {
       throw std::runtime_error("key size too large");
     }
     map_definition.key_size = static_cast<uint32_t>(key_size_in_bytes);
@@ -167,7 +167,7 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
 
   if (value) {
     size_t value_size_in_bytes = btf_types.get_size(value);
-    if (value_size > UINT32_MAX) {
+    if (value_size_in_bytes > UINT32_MAX) {
       throw std::runtime_error("value size too large");
     }
     map_definition.value_size = static_cast<uint32_t>(value_size_in_bytes);

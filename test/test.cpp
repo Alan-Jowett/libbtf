@@ -3,6 +3,7 @@
 #include <catch2/catch_all.hpp>
 
 #include <chrono>
+#include <cstring>
 #include <future>
 #include <map>
 #include <regex>
@@ -54,6 +55,10 @@ std::map<std::string, std::string> string_replacements = {
 // std::future::wait_for to enforce the time limit. This approach works reliably
 // on Windows with the MSVC compiler and provides clear failure messages when
 // timeouts occur.
+// Note: If a timeout occurs, the entire test process will exit to avoid hanging
+// the test suite. Calling FAIL from the main test thread does not reliably
+// terminate the test as it waits for the async thread to complete, which is not
+// possible if it is stuck in an infinite loop.
 template <typename Func>
 void run_with_timeout(Func &&func,
                       std::chrono::seconds timeout = std::chrono::seconds(10)) {
@@ -724,7 +729,7 @@ TEST_CASE("btf_maps_ringbuf_in_map", "[parsing][json]") {
   REQUIRE(map_definitions[1].inner_map_type_id != 0);
 
   REQUIRE(map_definitions[0].name == "inner_map");
-  REQUIRE(map_definitions[0].map_type == 27); // BPF_MAP_TYPE_ARRAY
+  REQUIRE(map_definitions[0].map_type == 27); // BPF_MAP_TYPE_RINGBUF
   REQUIRE(map_definitions[0].max_entries == 256 * 1024);
 }
 
