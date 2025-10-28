@@ -4,13 +4,20 @@
 #pragma once
 #include "btf.h"
 
+#include <cstddef>
 #include <functional>
+#include <iosfwd>
 #include <map>
 #include <optional>
 #include <set>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+// Forward declaration for cycle_detector to avoid circular includes
+namespace libbtf {
+class cycle_detector;
+}
 
 #define LIBBTF_BTF_TYPE_DATA_GET_KIND_TYPE(INDEX, TYPE)                        \
   template <>                                                                  \
@@ -42,12 +49,9 @@ public:
    * @brief Construct a new btf type data object from a vector of bytes.
    *
    * @param[in] btf_data The BTF data.
-   * @param[in] reject_cycles If true, reject cycles in the type graph.
-   * @throws std::runtime_error If the BTF data is invalid or if there are
-   * cycles in the type graph.
+   * @throws std::runtime_error If the BTF data is invalid.
    */
-  btf_type_data(const std::vector<std::byte> &btf_data,
-                bool reject_cycles = true);
+  btf_type_data(const std::vector<std::byte> &btf_data);
 
   /**
    * @brief Destroy the btf type data object
@@ -85,10 +89,6 @@ public:
   void replace(btf_type_id id, const btf_kind &kind);
   btf_type_id last_type_id() const { return id_to_kind.rbegin()->first; }
 
-  void visit_depth_first(std::optional<std::function<bool(btf_type_id)>> before,
-                         std::optional<std::function<void(btf_type_id)>> after,
-                         btf_type_id id) const;
-
   void to_c_header(std::ostream &out,
                    std::optional<std::function<bool(btf_type_id)>> filter =
                        std::nullopt) const;
@@ -107,14 +107,25 @@ private:
   btf_kind get_kind(btf_type_id id) const;
 
   void update_name_to_id(btf_type_id id);
-  void validate_type_graph(btf_type_id id,
-                           std::set<btf_type_id> &visited) const;
+
+  std::string
+  get_qualified_type_name_with_detector(btf_type_id id,
+                                        cycle_detector &detector) const;
+  btf_type_id
+  get_descendant_type_id_with_detector(btf_type_id id,
+                                       cycle_detector &detector) const;
+  std::string
+  get_type_declaration_with_detector(btf_type_id id, const std::string &name,
+                                     size_t indent,
+                                     cycle_detector &detector) const;
 
   std::string get_type_name(btf_type_id id) const;
-  std::string get_qualified_type_name(btf_type_id id) const;
-  btf_type_id get_descendant_type_id(btf_type_id id) const;
   std::string get_type_declaration(btf_type_id id, const std::string &name,
-                                   size_t indent) const;
+                                   size_t indent = 0) const;
+
+  uint32_t get_size_with_detector(btf_type_id id,
+                                  cycle_detector &detector) const;
+
   std::map<btf_type_id, btf_kind> id_to_kind;
   std::map<std::string, btf_type_id> name_to_id;
 };
