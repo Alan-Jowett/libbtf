@@ -21,6 +21,7 @@
 #define BTF_MEMBER_BIT_OFFSET(val) ((val)&0xffffff)
 
 #define BTF_HEADER_MAGIC 0xeB9F
+#define BTF_HEADER_MAGIC_BIG_ENDIAN 0x9FeB
 #define BTF_HEADER_VERSION 1
 
 #define BPF_LINE_INFO_LINE_NUM(line_col) ((line_col) >> 10)

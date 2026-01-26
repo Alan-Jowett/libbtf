@@ -7,10 +7,129 @@
 
 #include <cstring>
 #include <stdexcept>
+#include <algorithm>
 
 namespace libbtf {
+
+// Byte swap utilities for endianness conversion
+static inline uint16_t bswap_16(uint16_t val) {
+  return (val >> 8) | (val << 8);
+}
+
+static inline uint32_t bswap_32(uint32_t val) {
+  return ((val >> 24) & 0x000000FF) |
+         ((val >> 8)  & 0x0000FF00) |
+         ((val << 8)  & 0x00FF0000) |
+         ((val << 24) & 0xFF000000);
+}
+
+// Template to swap bytes for multi-byte types
+template <typename T>
+static void swap_bytes(T& value);
+
+template <>
+void swap_bytes<uint16_t>(uint16_t& value) {
+  value = bswap_16(value);
+}
+
+template <>
+void swap_bytes<uint32_t>(uint32_t& value) {
+  value = bswap_32(value);
+}
+
+template <>
+void swap_bytes<int32_t>(int32_t& value) {
+  value = static_cast<int32_t>(bswap_32(static_cast<uint32_t>(value)));
+}
+
+// Swap bytes for BTF structures
+static void swap_btf_header(btf_header_t& header) {
+  swap_bytes(header.magic);
+  // version and flags are single bytes, no swap needed
+  swap_bytes(header.hdr_len);
+  swap_bytes(header.type_off);
+  swap_bytes(header.type_len);
+  swap_bytes(header.str_off);
+  swap_bytes(header.str_len);
+}
+
+static void swap_btf_ext_header(btf_ext_header_t& header) {
+  swap_bytes(header.magic);
+  // version and flags are single bytes, no swap needed
+  swap_bytes(header.hdr_len);
+  swap_bytes(header.func_info_off);
+  swap_bytes(header.func_info_len);
+  swap_bytes(header.line_info_off);
+  swap_bytes(header.line_info_len);
+}
+
+static void swap_btf_type(btf_type_t& type) {
+  swap_bytes(type.name_off);
+  swap_bytes(type.info);
+  swap_bytes(type.size); // size and type are in a union, so swapping one swaps both
+}
+
+static void swap_btf_array(btf_array_t& array) {
+  swap_bytes(array.type);
+  swap_bytes(array.index_type);
+  swap_bytes(array.nelems);
+}
+
+static void swap_btf_member(btf_member_t& member) {
+  swap_bytes(member.name_off);
+  swap_bytes(member.type);
+  swap_bytes(member.offset);
+}
+
+static void swap_btf_param(btf_param_t& param) {
+  swap_bytes(param.name_off);
+  swap_bytes(param.type);
+}
+
+static void swap_btf_var(btf_var_t& var) {
+  swap_bytes(var.linkage);
+}
+
+static void swap_btf_var_secinfo(btf_var_secinfo_t& secinfo) {
+  swap_bytes(secinfo.type);
+  swap_bytes(secinfo.offset);
+  swap_bytes(secinfo.size);
+}
+
+static void swap_btf_enum(btf_enum_t& enm) {
+  swap_bytes(enm.name_off);
+  swap_bytes(enm.val);
+}
+
+static void swap_btf_enum64(btf_enum64_t& enm) {
+  swap_bytes(enm.name_off);
+  swap_bytes(enm.val_lo32);
+  swap_bytes(enm.val_hi32);
+}
+
+static void swap_btf_decl_tag(btf_decl_tag_t& tag) {
+  swap_bytes(tag.component_idx);
+}
+
+static void swap_btf_ext_info_sec(btf_ext_info_sec_t& sec) {
+  swap_bytes(sec.sec_name_off);
+  swap_bytes(sec.num_info);
+}
+
+static void swap_bpf_line_info(bpf_line_info_t& info) {
+  swap_bytes(info.insn_off);
+  swap_bytes(info.file_name_off);
+  swap_bytes(info.line_off);
+  swap_bytes(info.line_col);
+}
+
+static void swap_bpf_func_info(bpf_func_info_t& info) {
+  swap_bytes(info.insn_off);
+  swap_bytes(info.type_id);
+}
 template <typename T>
 static T read_btf(const std::vector<std::byte> &btf, size_t &offset,
+                  bool swap_endian = false,
                   size_t minimum_offset = 0, size_t maximum_offset = 0) {
   size_t length = 0;
   if (maximum_offset == 0) {
@@ -36,7 +155,46 @@ static T read_btf(const std::vector<std::byte> &btf, size_t &offset,
     if (offset > maximum_offset) {
       throw std::runtime_error("Invalid .BTF section - invalid type length");
     }
-    return *reinterpret_cast<const T *>(btf.data() + offset - length);
+    T value = *reinterpret_cast<const T *>(btf.data() + offset - length);
+    
+    // Swap bytes if needed for multi-byte types
+    if (swap_endian && length > 1) {
+      if constexpr (std::is_same<T, btf_header_t>::value) {
+        swap_btf_header(value);
+      } else if constexpr (std::is_same<T, btf_ext_header_t>::value) {
+        swap_btf_ext_header(value);
+      } else if constexpr (std::is_same<T, btf_type_t>::value) {
+        swap_btf_type(value);
+      } else if constexpr (std::is_same<T, btf_array_t>::value) {
+        swap_btf_array(value);
+      } else if constexpr (std::is_same<T, btf_member_t>::value) {
+        swap_btf_member(value);
+      } else if constexpr (std::is_same<T, btf_param_t>::value) {
+        swap_btf_param(value);
+      } else if constexpr (std::is_same<T, btf_var_t>::value) {
+        swap_btf_var(value);
+      } else if constexpr (std::is_same<T, btf_var_secinfo_t>::value) {
+        swap_btf_var_secinfo(value);
+      } else if constexpr (std::is_same<T, btf_enum_t>::value) {
+        swap_btf_enum(value);
+      } else if constexpr (std::is_same<T, btf_enum64_t>::value) {
+        swap_btf_enum64(value);
+      } else if constexpr (std::is_same<T, btf_decl_tag_t>::value) {
+        swap_btf_decl_tag(value);
+      } else if constexpr (std::is_same<T, btf_ext_info_sec_t>::value) {
+        swap_btf_ext_info_sec(value);
+      } else if constexpr (std::is_same<T, bpf_line_info_t>::value) {
+        swap_bpf_line_info(value);
+      } else if constexpr (std::is_same<T, bpf_func_info_t>::value) {
+        swap_bpf_func_info(value);
+      } else if constexpr (std::is_same<T, uint16_t>::value || 
+                           std::is_same<T, uint32_t>::value ||
+                           std::is_same<T, int32_t>::value) {
+        swap_bytes(value);
+      }
+    }
+    
+    return value;
   }
 }
 
@@ -61,14 +219,24 @@ static void validate_range(std::vector<std::byte> const &btf, size_t start,
 }
 
 static std::map<size_t, std::string>
-_btf_parse_string_table(const std::vector<std::byte> &btf) {
+_btf_parse_string_table(const std::vector<std::byte> &btf, bool& swap_endian) {
   std::map<size_t, std::string> string_table;
 
   size_t offset = 0;
-  auto btf_header = read_btf<btf_header_t>(btf, offset);
-  if (btf_header.magic != BTF_HEADER_MAGIC) {
+  auto btf_header = read_btf<btf_header_t>(btf, offset, false); // Read without swapping first
+  
+  // Detect endianness from magic number
+  swap_endian = false;
+  if (btf_header.magic == BTF_HEADER_MAGIC) {
+    swap_endian = false;
+  } else if (btf_header.magic == BTF_HEADER_MAGIC_BIG_ENDIAN) {
+    swap_endian = true;
+    // Swap the header we just read
+    swap_btf_header(btf_header);
+  } else {
     throw std::runtime_error("Invalid .BTF section - wrong magic");
   }
+  
   if (btf_header.version != BTF_HEADER_VERSION) {
     throw std::runtime_error("Invalid .BTF section - wrong version");
   }
@@ -88,7 +256,7 @@ _btf_parse_string_table(const std::vector<std::byte> &btf) {
 
   for (offset = string_table_start; offset < string_table_end;) {
     size_t string_offset = offset - string_table_start;
-    std::string value = read_btf<std::string>(btf, offset, string_table_start,
+    std::string value = read_btf<std::string>(btf, offset, swap_endian, string_table_start,
                                               string_table_end);
     if (offset > string_table_end) {
       throw std::runtime_error("Invalid .BTF section - invalid string length");
@@ -112,15 +280,26 @@ _btf_find_string(const std::map<size_t, std::string> &string_table,
 void btf_parse_line_information(const std::vector<std::byte> &btf,
                                 const std::vector<std::byte> &btf_ext,
                                 btf_line_info_visitor visitor) {
-  std::map<size_t, std::string> string_table = _btf_parse_string_table(btf);
+  bool swap_endian = false;
+  std::map<size_t, std::string> string_table = _btf_parse_string_table(btf, swap_endian);
 
   size_t btf_ext_offset = 0;
-  auto bpf_ext_header = read_btf<btf_ext_header_t>(btf_ext, btf_ext_offset);
+  auto bpf_ext_header = read_btf<btf_ext_header_t>(btf_ext, btf_ext_offset, false); // Read without swapping first
+  
+  // Detect endianness from magic number for BTF.ext
+  bool swap_endian_ext = false;
+  if (bpf_ext_header.magic == BTF_HEADER_MAGIC) {
+    swap_endian_ext = false;
+  } else if (bpf_ext_header.magic == BTF_HEADER_MAGIC_BIG_ENDIAN) {
+    swap_endian_ext = true;
+    // Swap the header we just read
+    swap_btf_ext_header(bpf_ext_header);
+  } else {
+    throw std::runtime_error("Invalid .BTF.ext section - wrong magic");
+  }
+  
   if (bpf_ext_header.hdr_len < sizeof(btf_ext_header_t)) {
     throw std::runtime_error("Invalid .BTF.ext section - wrong size");
-  }
-  if (bpf_ext_header.magic != BTF_HEADER_MAGIC) {
-    throw std::runtime_error("Invalid .BTF.ext section - wrong magic");
   }
   if (bpf_ext_header.version != BTF_HEADER_VERSION) {
     throw std::runtime_error("Invalid .BTF.ext section - wrong version");
@@ -139,7 +318,7 @@ void btf_parse_line_information(const std::vector<std::byte> &btf,
 
   btf_ext_offset = line_info_start;
   uint32_t line_info_record_size = read_btf<uint32_t>(
-      btf_ext, btf_ext_offset, line_info_start, line_info_end);
+      btf_ext, btf_ext_offset, swap_endian_ext, line_info_start, line_info_end);
   if (line_info_record_size < sizeof(bpf_line_info_t)) {
     throw std::runtime_error(std::string(
         "Invalid .BTF.ext section - invalid line info record size"));
@@ -153,12 +332,12 @@ void btf_parse_line_information(const std::vector<std::byte> &btf,
 #pragma warning(disable : 4815)
   for (; btf_ext_offset < line_info_end;) {
     auto section_info = read_btf<btf_ext_info_sec_t>(
-        btf_ext, btf_ext_offset, line_info_start, line_info_end);
+        btf_ext, btf_ext_offset, swap_endian_ext, line_info_start, line_info_end);
     auto section_name =
         _btf_find_string(string_table, section_info.sec_name_off);
     for (size_t index = 0; index < section_info.num_info; index++) {
       auto btf_line_info = read_btf<bpf_line_info_t>(
-          btf_ext, btf_ext_offset, line_info_start, line_info_end);
+          btf_ext, btf_ext_offset, swap_endian_ext, line_info_start, line_info_end);
       auto file_name =
           _btf_find_string(string_table, btf_line_info.file_name_off);
       auto source = _btf_find_string(string_table, btf_line_info.line_off);
@@ -172,13 +351,14 @@ void btf_parse_line_information(const std::vector<std::byte> &btf,
 
 void btf_parse_types(const std::vector<std::byte> &btf,
                      btf_type_visitor visitor) {
-  std::map<size_t, std::string> string_table = _btf_parse_string_table(btf);
+  bool swap_endian = false;
+  std::map<size_t, std::string> string_table = _btf_parse_string_table(btf, swap_endian);
   btf_type_id id = 0;
   size_t offset = 0;
 
-  auto btf_header = read_btf<btf_header_t>(btf, offset);
+  auto btf_header = read_btf<btf_header_t>(btf, offset, swap_endian);
 
-  if (btf_header.magic != BTF_HEADER_MAGIC) {
+  if (btf_header.magic != BTF_HEADER_MAGIC && btf_header.magic != BTF_HEADER_MAGIC_BIG_ENDIAN) {
     throw std::runtime_error("Invalid .BTF section - wrong magic");
   }
 
@@ -201,7 +381,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
 
   for (offset = type_start; offset < type_end;) {
     std::optional<std::string> name;
-    auto btf_type = read_btf<btf_type_t>(btf, offset, type_start, type_end);
+    auto btf_type = read_btf<btf_type_t>(btf, offset, swap_endian, type_start, type_end);
     if (btf_type.name_off) {
       name = _btf_find_string(string_table, btf_type.name_off);
     } else {
@@ -226,7 +406,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
     switch (BPF_TYPE_INFO_KIND(btf_type.info)) {
     case BTF_KIND_INT: {
       btf_kind_int kind_int;
-      uint32_t int_data = read_btf<uint32_t>(btf, offset, type_start, type_end);
+      uint32_t int_data = read_btf<uint32_t>(btf, offset, swap_endian, type_start, type_end);
       uint32_t encoding = BTF_INT_ENCODING(int_data);
       kind_int.offset_from_start_in_bits = BTF_INT_OFFSET(int_data);
       kind_int.field_width_in_bits = BTF_INT_BITS(int_data);
@@ -245,7 +425,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
       break;
     }
     case BTF_KIND_ARRAY: {
-      auto btf_array = read_btf<btf_array_t>(btf, offset, type_start, type_end);
+      auto btf_array = read_btf<btf_array_t>(btf, offset, swap_endian, type_start, type_end);
       btf_kind_array kind_array;
       kind_array.element_type = btf_array.type;
       kind_array.index_type = btf_array.index_type;
@@ -259,7 +439,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
       for (uint32_t index = 0; index < member_count; index++) {
         btf_kind_struct_member member;
         auto btf_member =
-            read_btf<btf_member_t>(btf, offset, type_start, type_end);
+            read_btf<btf_member_t>(btf, offset, swap_endian, type_start, type_end);
         if (btf_member.name_off) {
           member.name = _btf_find_string(string_table, btf_member.name_off);
         }
@@ -278,7 +458,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
       for (uint32_t index = 0; index < member_count; index++) {
         btf_kind_struct_member member;
         auto btf_member =
-            read_btf<btf_member_t>(btf, offset, type_start, type_end);
+            read_btf<btf_member_t>(btf, offset, swap_endian, type_start, type_end);
         if (btf_member.name_off) {
           member.name = _btf_find_string(string_table, btf_member.name_off);
         }
@@ -295,7 +475,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
       uint32_t enum_count = BPF_TYPE_INFO_VLEN(btf_type.info);
       btf_kind_enum kind_enum;
       for (uint32_t index = 0; index < enum_count; index++) {
-        auto btf_enum = read_btf<btf_enum_t>(btf, offset, type_start, type_end);
+        auto btf_enum = read_btf<btf_enum_t>(btf, offset, swap_endian, type_start, type_end);
         btf_kind_enum_member member;
         if (!btf_enum.name_off) {
           throw std::runtime_error(
@@ -357,7 +537,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
       uint32_t param_count = BPF_TYPE_INFO_VLEN(btf_type.info);
       for (uint32_t index = 0; index < param_count; index++) {
         auto btf_param =
-            read_btf<btf_param_t>(btf, offset, type_start, type_end);
+            read_btf<btf_param_t>(btf, offset, swap_endian, type_start, type_end);
         btf_kind_function_parameter param;
         // Name is optional.
         if (btf_param.name_off) {
@@ -372,7 +552,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
     }
     case BTF_KIND_VAR: {
       btf_kind_var kind_var;
-      auto btf_var = read_btf<btf_var_t>(btf, offset, type_start, type_end);
+      auto btf_var = read_btf<btf_var_t>(btf, offset, swap_endian, type_start, type_end);
       kind_var.name = name.value();
       kind_var.type = btf_type.type;
       kind_var.linkage =
@@ -385,7 +565,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
       uint32_t section_count = BPF_TYPE_INFO_VLEN(btf_type.info);
       for (uint32_t index = 0; index < section_count; index++) {
         auto btf_section_info =
-            read_btf<btf_var_secinfo_t>(btf, offset, type_start, type_end);
+            read_btf<btf_var_secinfo_t>(btf, offset, swap_endian, type_start, type_end);
         btf_kind_data_member member;
         member.type = btf_section_info.type;
         member.offset = btf_section_info.offset;
@@ -407,7 +587,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
     case BTF_KIND_DECL_TAG: {
       btf_kind_decl_tag kind_decl_tag;
       auto btf_decl_tag =
-          read_btf<btf_decl_tag_t>(btf, offset, type_start, type_end);
+          read_btf<btf_decl_tag_t>(btf, offset, swap_endian, type_start, type_end);
       kind_decl_tag.name = name.value();
       kind_decl_tag.type = btf_type.type;
       kind_decl_tag.component_index = btf_decl_tag.component_idx;
@@ -426,7 +606,7 @@ void btf_parse_types(const std::vector<std::byte> &btf,
       btf_kind_enum64 kind_enum;
       for (uint32_t index = 0; index < enum_count; index++) {
         auto btf_enum64 =
-            read_btf<btf_enum64_t>(btf, offset, type_start, type_end);
+            read_btf<btf_enum64_t>(btf, offset, swap_endian, type_start, type_end);
         btf_kind_enum64_member member;
         member.name = _btf_find_string(string_table, btf_enum64.name_off);
         member.value = (static_cast<uint64_t>(btf_enum64.val_hi32) << 32) |
