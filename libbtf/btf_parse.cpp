@@ -158,6 +158,8 @@ static T read_btf(const std::vector<std::byte> &btf, size_t &offset,
     T value = *reinterpret_cast<const T *>(btf.data() + offset - length);
     
     // Swap bytes if needed for multi-byte types
+    // Note: Using if constexpr ensures zero runtime overhead - the compiler evaluates
+    // these branches at compile time and only instantiates the matching branch for each type
     if (swap_endian && length > 1) {
       if constexpr (std::is_same<T, btf_header_t>::value) {
         swap_btf_header(value);
