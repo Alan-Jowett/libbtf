@@ -44,7 +44,7 @@ void swap_bytes<int32_t>(int32_t& value) {
 
 // Swap bytes for BTF structures
 static void swap_btf_header(btf_header_t& header) {
-  swap_bytes(header.magic);
+  // Don't swap magic - it's used for endianness detection
   // version and flags are single bytes, no swap needed
   swap_bytes(header.hdr_len);
   swap_bytes(header.type_off);
@@ -54,7 +54,7 @@ static void swap_btf_header(btf_header_t& header) {
 }
 
 static void swap_btf_ext_header(btf_ext_header_t& header) {
-  swap_bytes(header.magic);
+  // Don't swap magic - it's used for endianness detection
   // version and flags are single bytes, no swap needed
   swap_bytes(header.hdr_len);
   swap_bytes(header.func_info_off);
@@ -358,10 +358,8 @@ void btf_parse_types(const std::vector<std::byte> &btf,
 
   auto btf_header = read_btf<btf_header_t>(btf, offset, swap_endian);
 
-  if (btf_header.magic != BTF_HEADER_MAGIC && btf_header.magic != BTF_HEADER_MAGIC_BIG_ENDIAN) {
-    throw std::runtime_error("Invalid .BTF section - wrong magic");
-  }
-
+  // Magic was already validated in _btf_parse_string_table
+  
   if (btf_header.version != BTF_HEADER_VERSION) {
     throw std::runtime_error("Invalid .BTF section - wrong version");
   }
