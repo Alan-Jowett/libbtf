@@ -1418,6 +1418,64 @@ TEST_CASE("invalid_btf_version", "[parsing][negative]") {
                       Catch::Matchers::ContainsSubstring("wrong version"));
 }
 
+TEST_CASE("big_endian_btf_basic", "[parsing][endian]") {
+  // Create BTF data with big-endian magic number and verify it parses correctly
+  std::vector<std::byte> big_endian_btf;
+
+  // Helper function to swap bytes
+  auto swap16 = [](uint16_t val) -> uint16_t {
+    return (val >> 8) | (val << 8);
+  };
+  auto swap32 = [](uint32_t val) -> uint32_t {
+    return ((val >> 24) & 0x000000FF) |
+           ((val >> 8)  & 0x0000FF00) |
+           ((val << 8)  & 0x00FF0000) |
+           ((val << 24) & 0xFF000000);
+  };
+
+  // Create a big-endian BTF header
+  btf_header_t header = {
+      .magic = BTF_HEADER_MAGIC_BIG_ENDIAN, // Big-endian magic
+      .version = BTF_HEADER_VERSION,
+      .flags = 0,
+      .hdr_len = swap32(sizeof(btf_header_t)), // Need to swap multi-byte fields
+      .type_off = swap32(0),
+      .type_len = swap32(sizeof(btf_type_t) + sizeof(uint32_t)), // One int type
+      .str_off = swap32(sizeof(btf_type_t) + sizeof(uint32_t)),
+      .str_len = swap32(5)}; // "int" + null terminator + empty string at start
+
+  // Create a simple int type in big-endian format
+  btf_type_t int_type = {
+      .name_off = swap32(1), // Points to "int" in string table (after initial null byte)
+      .info = swap32((libbtf::BTF_KIND_INT << 24) | 0), // BTF_KIND_INT with 0 vlen
+      .size = swap32(4)}; // 4 bytes
+
+  // Int encoding: signed, 32 bits
+  uint32_t int_data = swap32((BTF_INT_SIGNED << 24) | 32);
+
+  // String table: "\0int\0"
+  const char* strings = "\0int";
+  size_t strings_len = 5;
+
+  // Build the BTF data
+  big_endian_btf.resize(sizeof(header) + sizeof(int_type) + sizeof(int_data) + strings_len);
+  size_t offset = 0;
+  
+  std::memcpy(big_endian_btf.data() + offset, &header, sizeof(header));
+  offset += sizeof(header);
+  
+  std::memcpy(big_endian_btf.data() + offset, &int_type, sizeof(int_type));
+  offset += sizeof(int_type);
+  
+  std::memcpy(big_endian_btf.data() + offset, &int_data, sizeof(int_data));
+  offset += sizeof(int_data);
+  
+  std::memcpy(big_endian_btf.data() + offset, strings, strings_len);
+
+  // Parse the big-endian BTF data - should not throw
+  REQUIRE_NOTHROW(libbtf::btf_type_data(big_endian_btf));
+}
+
 TEST_CASE("invalid_btf_header_size", "[parsing][negative]") {
   // Create BTF data with invalid header size
   std::vector<std::byte> invalid_btf;
