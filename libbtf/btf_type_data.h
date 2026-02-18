@@ -97,6 +97,14 @@ public:
   dependency_order(std::optional<std::function<bool(btf_type_id)>> filter =
                        std::nullopt) const;
 
+  /**
+   * @brief Get the name of a type from its id.
+   *
+   * @param[in] id The id of the type.
+   * @return The name of the type, or empty string if the type has no name.
+   */
+  std::string get_type_name(btf_type_id id) const;
+
 private:
   /**
    * @brief Get the kind object from a type id.
@@ -119,7 +127,6 @@ private:
                                      size_t indent,
                                      cycle_detector &detector) const;
 
-  std::string get_type_name(btf_type_id id) const;
   std::string get_type_declaration(btf_type_id id, const std::string &name,
                                    size_t indent = 0) const;
 

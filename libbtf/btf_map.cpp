@@ -157,6 +157,15 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
 
   if (key) {
     size_t key_size_in_bytes = btf_types.get_size(key);
+    if (key_size_in_bytes == 0) {
+      std::string type_name = btf_types.get_type_name(key);
+      if (type_name.empty()) {
+        type_name = "type_id=" + std::to_string(key);
+      }
+      throw std::runtime_error("map '" + name +
+                               "': cannot determine key size for type '" +
+                               type_name + "'");
+    }
     if (key_size_in_bytes > UINT32_MAX) {
       throw std::runtime_error("key size too large");
     }
@@ -167,6 +176,15 @@ _get_map_definition_from_btf(const btf_type_data &btf_types,
 
   if (value) {
     size_t value_size_in_bytes = btf_types.get_size(value);
+    if (value_size_in_bytes == 0) {
+      std::string type_name = btf_types.get_type_name(value);
+      if (type_name.empty()) {
+        type_name = "type_id=" + std::to_string(value);
+      }
+      throw std::runtime_error("map '" + name +
+                               "': cannot determine value size for type '" +
+                               type_name + "'");
+    }
     if (value_size_in_bytes > UINT32_MAX) {
       throw std::runtime_error("value size too large");
     }

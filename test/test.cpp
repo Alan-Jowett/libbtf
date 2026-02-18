@@ -1427,10 +1427,8 @@ TEST_CASE("big_endian_btf_basic", "[parsing][endian]") {
     return (val >> 8) | (val << 8);
   };
   auto swap32 = [](uint32_t val) -> uint32_t {
-    return ((val >> 24) & 0x000000FF) |
-           ((val >> 8)  & 0x0000FF00) |
-           ((val << 8)  & 0x00FF0000) |
-           ((val << 24) & 0xFF000000);
+    return ((val >> 24) & 0x000000FF) | ((val >> 8) & 0x0000FF00) |
+           ((val << 8) & 0x00FF0000) | ((val << 24) & 0xFF000000);
   };
 
   // Create a big-endian BTF header
@@ -1446,30 +1444,33 @@ TEST_CASE("big_endian_btf_basic", "[parsing][endian]") {
 
   // Create a simple int type in big-endian format
   btf_type_t int_type = {
-      .name_off = swap32(1), // Points to "int" in string table (after initial null byte)
-      .info = swap32((libbtf::BTF_KIND_INT << 24) | 0), // BTF_KIND_INT with 0 vlen
-      .size = swap32(4)}; // 4 bytes
+      .name_off = swap32(
+          1), // Points to "int" in string table (after initial null byte)
+      .info =
+          swap32((libbtf::BTF_KIND_INT << 24) | 0), // BTF_KIND_INT with 0 vlen
+      .size = swap32(4)};                           // 4 bytes
 
   // Int encoding: signed, 32 bits
   uint32_t int_data = swap32((BTF_INT_SIGNED << 24) | 32);
 
   // String table: "\0int\0"
-  const char* strings = "\0int";
+  const char *strings = "\0int";
   size_t strings_len = 5;
 
   // Build the BTF data
-  big_endian_btf.resize(sizeof(header) + sizeof(int_type) + sizeof(int_data) + strings_len);
+  big_endian_btf.resize(sizeof(header) + sizeof(int_type) + sizeof(int_data) +
+                        strings_len);
   size_t offset = 0;
-  
+
   std::memcpy(big_endian_btf.data() + offset, &header, sizeof(header));
   offset += sizeof(header);
-  
+
   std::memcpy(big_endian_btf.data() + offset, &int_type, sizeof(int_type));
   offset += sizeof(int_type);
-  
+
   std::memcpy(big_endian_btf.data() + offset, &int_data, sizeof(int_data));
   offset += sizeof(int_data);
-  
+
   std::memcpy(big_endian_btf.data() + offset, strings, strings_len);
 
   // Parse the big-endian BTF data - should not throw
@@ -2042,4 +2043,155 @@ TEST_CASE("internal_helper_function_coverage", "[internal]") {
     // Should contain type declarations that use the private helper functions
     REQUIRE(header_str.length() > 10); // Should have some content
   }
+}
+
+TEST_CASE("btf_map_rejects_forward_declaration_key", "[btf_map][negative]") {
+  // This test verifies that parse_btf_map_section rejects maps where the key
+  // type is a forward declaration (BTF_KIND_FWD), which has no size.
+  libbtf::btf_type_data btf_data;
+
+  // Create the forward declaration for the key type (id 1)
+  auto fwd_key_id = btf_data.append(
+      libbtf::btf_kind_fwd{.name = "incomplete_key_type", .is_struct = true});
+
+  // Create a pointer to the forward declaration (id 2)
+  auto ptr_to_fwd_id =
+      btf_data.append(libbtf::btf_kind_ptr{.type = fwd_key_id});
+
+  // Create helper types for __uint macro encoding
+  auto int_id = btf_data.append(libbtf::btf_kind_int{
+      .name = "int", .size_in_bytes = 4, .field_width_in_bits = 32});
+
+  auto array_size_type_id =
+      btf_data.append(libbtf::btf_kind_int{.name = "__ARRAY_SIZE_TYPE__",
+                                           .size_in_bytes = 4,
+                                           .field_width_in_bits = 32});
+
+  // Create __uint encoded values for type and max_entries
+  // __uint(type, BPF_MAP_TYPE_HASH) encodes as int(*)[1]
+  auto type_array_id = btf_data.append(
+      libbtf::btf_kind_array{.element_type = int_id,
+                             .index_type = array_size_type_id,
+                             .count_of_elements = 1}); // BPF_MAP_TYPE_HASH = 1
+  auto type_ptr_id =
+      btf_data.append(libbtf::btf_kind_ptr{.type = type_array_id});
+
+  auto max_entries_array_id =
+      btf_data.append(libbtf::btf_kind_array{.element_type = int_id,
+                                             .index_type = array_size_type_id,
+                                             .count_of_elements = 10});
+  auto max_entries_ptr_id =
+      btf_data.append(libbtf::btf_kind_ptr{.type = max_entries_array_id});
+
+  // Create the map struct with key pointing to forward declaration
+  auto map_struct_id = btf_data.append(libbtf::btf_kind_struct{
+      .name = std::nullopt,
+      .members =
+          {
+              {.name = "type",
+               .type = type_ptr_id,
+               .offset_from_start_in_bits = 0},
+              {.name = "max_entries",
+               .type = max_entries_ptr_id,
+               .offset_from_start_in_bits = 64},
+              {.name = "key",
+               .type = ptr_to_fwd_id, // Key points to FWD type
+               .offset_from_start_in_bits = 128},
+          },
+      .size_in_bytes = 24});
+
+  // Create a VAR for the map
+  auto map_var_id = btf_data.append(
+      libbtf::btf_kind_var{.name = "test_map",
+                           .type = map_struct_id,
+                           .linkage = libbtf::BTF_LINKAGE_STATIC});
+
+  // Create the .maps data section containing this map
+  btf_data.append(libbtf::btf_kind_data_section{
+      .name = ".maps",
+      .members = {{.type = map_var_id, .offset = 0, .size = 24}}});
+
+  // Parsing should throw because key type is a forward declaration
+  REQUIRE_THROWS_WITH(
+      libbtf::parse_btf_map_section(btf_data),
+      Catch::Matchers::ContainsSubstring("cannot determine key size") &&
+          Catch::Matchers::ContainsSubstring("incomplete_key_type"));
+}
+
+TEST_CASE("btf_map_rejects_forward_declaration_value", "[btf_map][negative]") {
+  // This test verifies that parse_btf_map_section rejects maps where the value
+  // type is a forward declaration (BTF_KIND_FWD), which has no size.
+  libbtf::btf_type_data btf_data;
+
+  // Create the forward declaration for the value type
+  auto fwd_value_id = btf_data.append(
+      libbtf::btf_kind_fwd{.name = "incomplete_value_type", .is_struct = true});
+
+  // Create a pointer to the forward declaration
+  auto ptr_to_fwd_id =
+      btf_data.append(libbtf::btf_kind_ptr{.type = fwd_value_id});
+
+  // Create helper types for __uint macro encoding
+  auto int_id = btf_data.append(libbtf::btf_kind_int{
+      .name = "int", .size_in_bytes = 4, .field_width_in_bits = 32});
+
+  auto array_size_type_id =
+      btf_data.append(libbtf::btf_kind_int{.name = "__ARRAY_SIZE_TYPE__",
+                                           .size_in_bytes = 4,
+                                           .field_width_in_bits = 32});
+
+  // Create a valid key type (simple int)
+  auto key_ptr_id = btf_data.append(libbtf::btf_kind_ptr{.type = int_id});
+
+  // Create __uint encoded values for type and max_entries
+  auto type_array_id = btf_data.append(
+      libbtf::btf_kind_array{.element_type = int_id,
+                             .index_type = array_size_type_id,
+                             .count_of_elements = 1}); // BPF_MAP_TYPE_HASH = 1
+  auto type_ptr_id =
+      btf_data.append(libbtf::btf_kind_ptr{.type = type_array_id});
+
+  auto max_entries_array_id =
+      btf_data.append(libbtf::btf_kind_array{.element_type = int_id,
+                                             .index_type = array_size_type_id,
+                                             .count_of_elements = 10});
+  auto max_entries_ptr_id =
+      btf_data.append(libbtf::btf_kind_ptr{.type = max_entries_array_id});
+
+  // Create the map struct with value pointing to forward declaration
+  auto map_struct_id = btf_data.append(libbtf::btf_kind_struct{
+      .name = std::nullopt,
+      .members =
+          {
+              {.name = "type",
+               .type = type_ptr_id,
+               .offset_from_start_in_bits = 0},
+              {.name = "max_entries",
+               .type = max_entries_ptr_id,
+               .offset_from_start_in_bits = 64},
+              {.name = "key",
+               .type = key_ptr_id,
+               .offset_from_start_in_bits = 128},
+              {.name = "value",
+               .type = ptr_to_fwd_id, // Value points to FWD type
+               .offset_from_start_in_bits = 192},
+          },
+      .size_in_bytes = 32});
+
+  // Create a VAR for the map
+  auto map_var_id = btf_data.append(
+      libbtf::btf_kind_var{.name = "test_map",
+                           .type = map_struct_id,
+                           .linkage = libbtf::BTF_LINKAGE_STATIC});
+
+  // Create the .maps data section containing this map
+  btf_data.append(libbtf::btf_kind_data_section{
+      .name = ".maps",
+      .members = {{.type = map_var_id, .offset = 0, .size = 32}}});
+
+  // Parsing should throw because value type is a forward declaration
+  REQUIRE_THROWS_WITH(
+      libbtf::parse_btf_map_section(btf_data),
+      Catch::Matchers::ContainsSubstring("cannot determine value size") &&
+          Catch::Matchers::ContainsSubstring("incomplete_value_type"));
 }
